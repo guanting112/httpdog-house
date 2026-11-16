@@ -1,5 +1,7 @@
 # httpdog-house
 
+English | [繁體中文](README.zh-TW.md)
+
 A place to read the alerts your [httpdog](https://github.com/guanting112/httpdog) instances send.
 
 httpdog watches access logs and POSTs an alert to a URL of your choice. This project is that URL, plus a UI behind a login: it receives the alerts of every instance, checks each one's signature, stores them, and lets you search and filter them. It runs entirely on Cloudflare: two Workers and one D1 database.
@@ -206,10 +208,12 @@ Notes for whoever edits it:
 - **The request's own address.** On Workers, h3's `getRequestURL()` says `http://` for an HTTPS request. Code that needs the real origin uses `requestOrigin()` in `server/utils/http.ts`.
 - **Fonts.** Ubuntu Mono, Latin subset, served from this site. Chinese text falls back to the system font.
 - **Dark and light.** Every colour comes from the tokens at the top of `main.css`; `<html data-theme="light">` swaps in the second set. A new colour goes in as a token with a value for each theme, never as a literal in a component. The theme is the one chosen in the browser (header, sign-in page or account page), else the system's; a small inline script in `nuxt.config.ts` sets it before the first paint.
+- **Language.** The UI starts in English; switching to Chinese is remembered in the browser.
+- **Two READMEs.** `README.zh-TW.md` is this file in Traditional Chinese. Change both together.
 
 ## What has been checked
 
 - `make check`: type checks, and 35 unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, and the receiver against the real schema: accepted, repeated, refused for each reason, and the daily clean-up.
 - On one machine (macOS, wrangler 4.163.0), with both Workers running in wrangler's local runtime: the real `httpdog` binary replaying `sample.log` delivered its 3 signed alerts, and with a wrong secret all 9 attempts were refused and recorded.
-- In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of a new alert, filters, creating, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer being kept out of admin pages and admin API calls, changing a password, and the pages in both languages at desktop and phone widths.
+- In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of a new alert, filters, creating, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer being kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
 - **Not checked: anything on Cloudflare itself.** Nothing has been deployed, so the real D1, the rate limiter, the daily timer and the CPU limit of the free plan are untested.
