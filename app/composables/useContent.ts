@@ -1,4 +1,5 @@
-// The words of the UI in the reader's language. The choice is remembered in this browser.
+// The words of the UI. English unless the reader picks Chinese; the choice is remembered in this
+// browser. The browser's own language is not consulted: the UI starts the same for everyone.
 
 import { type Content, en, type Locale } from '~/content/en'
 import { zhTw } from '~/content/zh-tw'
@@ -10,9 +11,9 @@ function remembered(): Locale {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === 'en' || stored === 'zh-tw') return stored
   } catch {
-    // storage can be turned off; the browser's language is still a good guess
+    // storage can be turned off; the default still applies
   }
-  return navigator.language.toLowerCase().startsWith('zh') ? 'zh-tw' : 'en'
+  return 'en'
 }
 
 export function useLocale() {
