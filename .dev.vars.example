@@ -1,0 +1,10 @@
+# Local values for `make dev`. `make dev-init` writes this file for you as .dev.vars, with a fresh
+# key, and copies the key to ingest/.dev.vars for the ingest Worker. Neither file is committed.
+
+# 32 random bytes in base64: openssl rand -base64 32
+# Both Workers must have the same one: the UI encrypts signing secrets with it and the ingest
+# Worker decrypts them. In production it is a Cloudflare secret (`make secrets`).
+SECRETS_KEY=
+
+# Overrides INGEST_URL of wrangler.jsonc while developing: the local ingest Worker
+INGEST_URL=http://localhost:8788/alerts

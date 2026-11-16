@@ -1,0 +1,11 @@
+<!-- Shown while the app's code loads: the same dark background, so the page never flashes white. -->
+<style>
+  html, body { margin: 0; background: #06080c; }
+  .hd-boot {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    font: 16px ui-monospace, 'SF Mono', Menlo, Consolas, monospace; color: #7f8a9b;
+  }
+  .hd-boot i { display: inline-block; width: 0.55em; height: 1em; margin-left: 0.2em; vertical-align: -0.14em; background: #ffb454; animation: hd-blink 1.1s steps(1) infinite; }
+  @keyframes hd-blink { 50% { opacity: 0; } }
+</style>
+<div class="hd-boot"><span>httpdog<i></i></span></div>

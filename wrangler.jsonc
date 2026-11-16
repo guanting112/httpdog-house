@@ -1,0 +1,45 @@
+// The UI Worker: the pages (static files) and their API (server/), built by Nuxt.
+//
+// `nuxt build` merges this file with the two things Nitro decides (the entry file and the assets
+// directory) into .output/server/wrangler.json; `wrangler deploy` then uses that. So set bindings
+// and domains here, and deploy with `make deploy-ui`, which builds first.
+//
+// It shares one D1 database with the ingest Worker (ingest/wrangler.jsonc): `database_id` must be
+// the same in both files.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "httpdog-house-ui",
+  "compatibility_date": "2026-11-15",
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "httpdog-house",
+      // Replace with the id that `make db-create` prints. The same id goes in ingest/wrangler.jsonc
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "vars": {
+    // Where httpdog should POST: the address of the ingest Worker, ending in /alerts.
+    // The keys page shows it in the lines to copy to a host
+    "INGEST_URL": "https://httpdog-house-ingest.example.workers.dev/alerts"
+  },
+
+  // Sign-in attempts allowed per address per minute (counted per Cloudflare location).
+  // namespace_id is any number that no other rate limiter in the account uses
+  "ratelimits": [{ "name": "LOGIN_LIMITER", "namespace_id": "7301", "simple": { "limit": 10, "period": 60 } }],
+
+  // Keeps this Worker's logs (the audit lines of server/utils/http.ts, failures) in the Cloudflare dashboard
+  "observability": { "enabled": true }
+
+  // SECRETS_KEY is a secret, not a var: set it with `make secrets`.
+
+  // By default the Worker is served from httpdog-house-ui.<your account>.workers.dev.
+  // To give it a hostname of your own (the zone must be in the same Cloudflare account):
+  //
+  // "routes": [{ "pattern": "alerts.example.com", "custom_domain": true }],
+  // "workers_dev": false,
+  // "preview_urls": false
+}
