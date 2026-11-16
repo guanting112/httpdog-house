@@ -23,5 +23,8 @@
     "typescript": "^5.9.3",
     "vue-tsc": "^3.3.14",
     "wrangler": "4.163.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   }
 }
