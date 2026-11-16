@@ -35,6 +35,8 @@ export const zhTw: Content = {
     back: '回到告警',
   },
 
+  theme: { label: '外觀', dark: '深色', light: '淺色' },
+
   ago: (seconds: number): string => {
     if (seconds < 10) return '剛剛'
     if (seconds < 60) return `${seconds} 秒前`

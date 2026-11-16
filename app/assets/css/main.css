@@ -1,8 +1,15 @@
 /* Tokens, base styles and the few classes every page shares. The look is httpdog's website
-   (httpdog-web): a dark terminal, Ubuntu Mono, amber for what matters. What is specific to one
-   page or component sits next to its markup. */
+   (httpdog-web): a terminal, Ubuntu Mono, amber for what matters. What is specific to one page
+   or component sits next to its markup.
+
+   Two themes, dark (the website's) and light. Every colour on a page comes from the tokens below,
+   so a theme is only a second set of values: <html data-theme="light"> switches them. The
+   attribute is set before the first paint by the small script in nuxt.config.ts, and afterwards
+   by useTheme(). */
 
 :root {
+  color-scheme: dark;
+
   --bg: #06080c;
   --bg-raise: #0a0e14;
   --bg-inset: #080b10;
@@ -14,6 +21,9 @@
   --dim: #7f8a9b;
   --faint: #465165;
 
+  /* --amber is the accent as text, lines and small marks. As a filled surface (the primary
+     button, selected text) the accent is --accent-fill with --on-accent on top: on a light
+     page the text accent has to be much darker than a button can be */
   --amber: #ffb454;
   --amber-soft: #b98a3a;
   --red: #ff5f56;
@@ -23,6 +33,27 @@
   --orange: #ff8f40;
   --teal: #95e6cb;
 
+  --accent-fill: #ffb454;
+  --accent-fill-hover: #ffc978;
+  --on-accent: #0a0700;
+
+  /* The same colours as "r, g, b", for tints: rgba(var(--amber-rgb), 0.08) */
+  --bg-rgb: 6, 8, 12;
+  --amber-rgb: 255, 180, 84;
+  --red-rgb: 255, 95, 86;
+  --green-rgb: 170, 217, 76;
+
+  --btn-bg: rgba(10, 14, 20, 0.7);
+  --hover: rgba(255, 255, 255, 0.025);
+  --backdrop: rgba(3, 4, 6, 0.78);
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  /* how strongly small lit things (the status dots, the dog) glow; nothing glows on paper */
+  --glow: 1;
+
+  --tk-comment: #5a6678;
+  --tk-punct: #6b788b;
+  --tk-var: #f29668;
+
   /* Ubuntu Mono has no CJK glyphs; Chinese text falls through to the system font */
   --mono: 'Ubuntu Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'PingFang TC', 'Noto Sans TC',
     'Microsoft JhengHei', monospace;
@@ -30,6 +61,51 @@
   --wrap: 1280px;
   --gutter: clamp(14px, 3vw, 36px);
   --header-h: 50px;
+}
+
+/* Light: warm paper instead of a black screen. The accent keeps its hue and goes dark enough to
+   read as text; the filled button keeps the bright amber */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f6f4ee;
+  --bg-raise: #fffefb;
+  --bg-inset: #efece4;
+  --line: #e0dbcf;
+  --line-strong: #c4bdae;
+
+  --text: #3b4048;
+  --text-strong: #15181d;
+  --dim: #666c75;
+  --faint: #a8a294;
+
+  --amber: #955600;
+  --amber-soft: #d9ab66;
+  --red: #c0392b;
+  --green: #39740f;
+  --blue: #0864ab;
+  --purple: #7638ba;
+  --orange: #ad4e09;
+  --teal: #0b6e64;
+
+  --accent-fill: #ffb454;
+  --accent-fill-hover: #f5a336;
+  --on-accent: #1c1300;
+
+  --bg-rgb: 246, 244, 238;
+  --amber-rgb: 149, 86, 0;
+  --red-rgb: 192, 57, 43;
+  --green-rgb: 57, 116, 15;
+
+  --btn-bg: rgba(255, 255, 255, 0.7);
+  --hover: rgba(0, 0, 0, 0.03);
+  --backdrop: rgba(44, 40, 30, 0.45);
+  --shadow: 0 20px 60px rgba(44, 40, 30, 0.22);
+  --glow: 0;
+
+  --tk-comment: #8b9099;
+  --tk-punct: #8f897b;
+  --tk-var: #ad4e09;
 }
 
 *,
@@ -41,7 +117,6 @@
 html {
   font-size: 16px;
   background: var(--bg);
-  color-scheme: dark;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -56,8 +131,8 @@ body {
 }
 
 ::selection {
-  background: var(--amber);
-  color: #000;
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 h1,
@@ -189,7 +264,7 @@ kbd {
 /* ---- text */
 .code {
   color: var(--amber);
-  background: rgba(255, 180, 84, 0.08);
+  background: rgba(var(--amber-rgb), 0.08);
   padding: 0.05em 0.35em;
   border-radius: 2px;
   overflow-wrap: anywhere;
@@ -252,7 +327,7 @@ kbd {
   padding: 0.5em 0.95em;
   border: 1px solid var(--line-strong);
   color: var(--text-strong);
-  background: rgba(10, 14, 20, 0.7);
+  background: var(--btn-bg);
   white-space: nowrap;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -269,19 +344,20 @@ kbd {
   color: var(--amber);
 }
 .btn--primary {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: #0a0700;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
   font-weight: 700;
 }
 .btn--primary::before,
 .btn--primary::after {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--on-accent);
+  opacity: 0.45;
 }
 .btn--primary:hover:not(:disabled) {
-  background: #ffc978;
-  border-color: #ffc978;
-  color: #0a0700;
+  background: var(--accent-fill-hover);
+  border-color: var(--accent-fill-hover);
+  color: var(--on-accent);
 }
 .btn--danger:hover:not(:disabled) {
   border-color: var(--red);
@@ -468,7 +544,7 @@ a.chip:hover {
 .chip--on {
   border-color: var(--amber);
   color: var(--amber);
-  background: rgba(255, 180, 84, 0.07);
+  background: rgba(var(--amber-rgb), 0.07);
 }
 
 .dot {
@@ -477,7 +553,7 @@ a.chip:hover {
   height: 0.5em;
   border-radius: 50%;
   background: var(--amber);
-  box-shadow: 0 0 8px rgba(255, 180, 84, 0.7);
+  box-shadow: 0 0 8px rgba(var(--amber-rgb), calc(0.7 * var(--glow)));
   vertical-align: 0.08em;
 }
 .dot--live {
@@ -489,11 +565,11 @@ a.chip:hover {
 }
 .dot--red {
   background: var(--red);
-  box-shadow: 0 0 8px rgba(255, 95, 86, 0.7);
+  box-shadow: 0 0 8px rgba(var(--red-rgb), calc(0.7 * var(--glow)));
 }
 .dot--green {
   background: var(--green);
-  box-shadow: 0 0 8px rgba(170, 217, 76, 0.6);
+  box-shadow: 0 0 8px rgba(var(--green-rgb), calc(0.6 * var(--glow)));
 }
 @keyframes pulse {
   50% {
@@ -512,7 +588,7 @@ a.chip:hover {
 
 /* Syntax colours, shared by every code block */
 .tk-c {
-  color: #5a6678;
+  color: var(--tk-comment);
   font-style: italic;
 }
 .tk-k {
@@ -528,7 +604,7 @@ a.chip:hover {
   color: var(--orange);
 }
 .tk-p {
-  color: #6b788b;
+  color: var(--tk-punct);
 }
 .tk-cmd {
   color: var(--amber);
@@ -537,7 +613,7 @@ a.chip:hover {
   color: var(--teal);
 }
 .tk-var {
-  color: #f29668;
+  color: var(--tk-var);
 }
 .tk-alert {
   color: var(--red);

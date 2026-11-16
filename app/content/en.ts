@@ -39,6 +39,9 @@ export const en = {
     back: 'back to alerts',
   },
 
+  /** The two looks. The switch in the header shows the one it changes to */
+  theme: { label: 'appearance', dark: 'dark', light: 'light' },
+
   /** How long ago, from a number of seconds */
   ago: (seconds: number): string => {
     if (seconds < 10) return 'just now'

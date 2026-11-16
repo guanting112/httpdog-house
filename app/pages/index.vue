@@ -466,11 +466,11 @@ watch(
   transition: background 0.15s;
 }
 .row > .line:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--hover);
 }
 .row.open {
   border-left-color: var(--amber);
-  background: rgba(255, 180, 84, 0.035);
+  background: rgba(var(--amber-rgb), 0.045);
 }
 .row.overload {
   border-left-color: var(--red);
@@ -480,7 +480,7 @@ watch(
 }
 @keyframes arrive {
   from {
-    background: rgba(255, 95, 86, 0.2);
+    background: rgba(var(--red-rgb), 0.2);
   }
 }
 .c-time {

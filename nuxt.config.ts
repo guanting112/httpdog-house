@@ -22,12 +22,23 @@ export default defineNuxtConfig({
       title: 'httpdog house',
       htmlAttrs: { lang: 'en' },
       meta: [
-        { name: 'theme-color', content: '#06080c' },
-        { name: 'color-scheme', content: 'dark' },
         // a private tool: nothing here belongs in a search engine
         { name: 'robots', content: 'noindex, nofollow' },
       ],
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+      // Picks dark or light before anything is drawn, so the page never starts in the wrong one:
+      // the choice remembered in this browser (app/composables/useTheme.ts), else the system's.
+      // It is an inline script; server/plugins/page-headers.ts allows it by its hash.
+      script: [
+        {
+          key: 'theme',
+          tagPosition: 'head',
+          innerHTML:
+            "(function(){var t;try{t=localStorage.getItem('hd_theme')}catch(e){}" +
+            "if(t!=='light'&&t!=='dark')t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';" +
+            "document.documentElement.setAttribute('data-theme',t)})()",
+        },
+      ],
     },
   },
 

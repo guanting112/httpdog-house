@@ -44,12 +44,12 @@ onMounted(sync)
   overflow: auto;
 }
 .dialog::backdrop {
-  background: rgba(3, 4, 6, 0.78);
+  background: var(--backdrop);
   backdrop-filter: blur(2px);
 }
 .panel {
   border-color: var(--line-strong);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow);
 }
 .dialog-body {
   padding: 1.2rem 1.2rem 1.3rem;

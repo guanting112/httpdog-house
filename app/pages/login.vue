@@ -7,6 +7,7 @@ definePageMeta({ layout: false })
 
 const c = useContent()
 const { setLocale } = useLocale()
+const { theme, toggleTheme } = useTheme()
 const { signIn } = useSession()
 const route = useRoute()
 
@@ -55,7 +56,10 @@ async function submit() {
         <p v-if="error" class="say say--error" role="alert">{{ error }}</p>
         <div class="form-actions">
           <button class="btn btn--primary" :disabled="busy">{{ busy ? c.common.working : c.login.submit }}</button>
-          <button type="button" class="act lang" @click="setLocale(c.other.locale)">{{ c.other.label }}</button>
+          <span class="acts switches">
+            <button type="button" class="act" :aria-label="c.theme.label" @click="toggleTheme">{{ theme === 'dark' ? c.theme.light : c.theme.dark }}</button>
+            <button type="button" class="act" @click="setLocale(c.other.locale)">{{ c.other.label }}</button>
+          </span>
         </div>
       </div>
     </form>
@@ -72,14 +76,14 @@ async function submit() {
   gap: clamp(1.5rem, 6vw, 4.5rem);
   padding: 2rem var(--gutter);
   /* a little light behind the dog, so the black is not flat */
-  background: radial-gradient(50% 60% at 50% 50%, rgba(255, 180, 84, 0.06), transparent 70%);
+  background: radial-gradient(50% 60% at 50% 50%, rgba(var(--amber-rgb), 0.06), transparent 70%);
 }
 .art {
   font-size: 0.88rem;
   line-height: 0.92;
   font-weight: 700;
   color: var(--amber);
-  text-shadow: 0 0 10px rgba(255, 180, 84, 0.5);
+  text-shadow: 0 0 10px rgba(var(--amber-rgb), calc(0.5 * var(--glow)));
   user-select: none;
 }
 .box {
@@ -89,7 +93,7 @@ async function submit() {
   color: var(--dim);
   font-size: 0.93rem;
 }
-.lang {
+.switches {
   margin-left: auto;
 }
 @media (max-width: 640px) {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// Your own account: change the password, pick the language.
+// Your own account: change the password, pick the language and the look.
 const c = useContent()
 const api = useApi()
 const { locale, setLocale } = useLocale()
+const { theme, setTheme } = useTheme()
 const { user } = useSession()
 
 useHead({ title: () => `${c.value.account.title} | httpdog house` })
@@ -72,6 +73,16 @@ async function submit() {
       <div class="panel-body chips">
         <button type="button" class="chip" :class="{ 'chip--on': locale === 'en' }" lang="en" @click="setLocale('en')">English</button>
         <button type="button" class="chip" :class="{ 'chip--on': locale === 'zh-tw' }" lang="zh-Hant-TW" @click="setLocale('zh-tw')">繁體中文</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-bar">
+        <span class="panel-name">{{ c.theme.label }}</span>
+      </header>
+      <div class="panel-body chips">
+        <button type="button" class="chip" :class="{ 'chip--on': theme === 'dark' }" :aria-pressed="theme === 'dark'" @click="setTheme('dark')">{{ c.theme.dark }}</button>
+        <button type="button" class="chip" :class="{ 'chip--on': theme === 'light' }" :aria-pressed="theme === 'light'" @click="setTheme('light')">{{ c.theme.light }}</button>
       </div>
     </section>
   </div>

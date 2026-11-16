@@ -34,14 +34,14 @@ useHead({ title: () => `${status.value} | httpdog house`, htmlAttrs: { lang: () 
   flex-wrap: wrap;
   gap: clamp(1.5rem, 6vw, 4rem);
   padding: 2rem var(--gutter);
-  background: radial-gradient(50% 60% at 50% 50%, rgba(255, 180, 84, 0.06), transparent 70%);
+  background: radial-gradient(50% 60% at 50% 50%, rgba(var(--amber-rgb), 0.06), transparent 70%);
 }
 .art {
   font-size: 0.88rem;
   line-height: 0.92;
   font-weight: 700;
   color: var(--amber);
-  text-shadow: 0 0 10px rgba(255, 180, 84, 0.5);
+  text-shadow: 0 0 10px rgba(var(--amber-rgb), calc(0.5 * var(--glow)));
   user-select: none;
 }
 .line {

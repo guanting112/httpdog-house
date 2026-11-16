@@ -193,7 +193,7 @@ Check Cloudflare's own pages for today's numbers; this is what the design leans 
 | `app/pages/` | One file per page |
 | `app/components/` | `AlertDetail`, `KeySetup`, the header, dialogs, code blocks |
 | `app/content/en.ts`, `zh-tw.ts` | Every word the UI shows, one file per language, same shape. Change both together |
-| `app/assets/css/main.css` | Colours, type and the shared classes. The look is httpdog's website |
+| `app/assets/css/main.css` | Colours for both themes, type and the shared classes. The dark look is httpdog's website |
 | `migrations/` | The database schema |
 | `scripts/` | `create-admin.ts` and `send-test-alert.ts` |
 | `test/` | Unit tests. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
@@ -205,6 +205,7 @@ Notes for whoever edits it:
 - **wrangler and the generated config.** After a build, wrangler run without `-c` uses the config Nitro generated. That is right for deploying the UI and wrong for everything else, so the `Makefile` always passes `-c`.
 - **The request's own address.** On Workers, h3's `getRequestURL()` says `http://` for an HTTPS request. Code that needs the real origin uses `requestOrigin()` in `server/utils/http.ts`.
 - **Fonts.** Ubuntu Mono, Latin subset, served from this site. Chinese text falls back to the system font.
+- **Dark and light.** Every colour comes from the tokens at the top of `main.css`; `<html data-theme="light">` swaps in the second set. A new colour goes in as a token with a value for each theme, never as a literal in a component. The theme is the one chosen in the browser (header, sign-in page or account page), else the system's; a small inline script in `nuxt.config.ts` sets it before the first paint.
 
 ## What has been checked
 

@@ -2,6 +2,7 @@
 // The bar at the top of every page behind the login: where you are, where you can go, who you are.
 const c = useContent()
 const { setLocale } = useLocale()
+const { theme, toggleTheme } = useTheme()
 const { user, isAdmin, signOut } = useSession()
 const route = useRoute()
 
@@ -35,6 +36,10 @@ const links = computed(() => [
         <button type="button" class="lang" :lang="c.other.locale === 'zh-tw' ? 'zh-Hant-TW' : 'en'" @click="setLocale(c.other.locale)">
           {{ c.other.label }}
         </button>
+        <!-- like the language switch, it names what it changes to -->
+        <button type="button" class="lang" :aria-label="c.theme.label" @click="toggleTheme">
+          {{ theme === 'dark' ? c.theme.light : c.theme.dark }}
+        </button>
         <NuxtLink v-if="user" class="who" to="/account" :class="{ on: route.path === '/account' }">{{ user.username }}</NuxtLink>
         <button type="button" class="act" @click="signOut">{{ c.nav.signOut }}</button>
       </div>
@@ -47,7 +52,7 @@ const links = computed(() => [
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(6, 8, 12, 0.82);
+  background: rgba(var(--bg-rgb), 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -131,8 +136,8 @@ const links = computed(() => [
   left: 8px;
   top: -60px;
   padding: 0.5em 0.8em;
-  background: var(--amber);
-  color: #000;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   z-index: 60;
 }
 .skip:focus {
