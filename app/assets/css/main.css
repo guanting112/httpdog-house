@@ -563,6 +563,19 @@ a.chip:hover {
   background: var(--faint);
   box-shadow: none;
 }
+
+/* Where something is named as switched off: a disabled key refuses alerts and a disabled account
+   cannot sign in, so the word is boxed in red and not left to a grey dot */
+.tag-off {
+  display: inline-block;
+  padding: 0 0.55em;
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .dot--red {
   background: var(--red);
   box-shadow: 0 0 8px rgba(var(--red-rgb), calc(0.7 * var(--glow)));

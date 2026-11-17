@@ -172,14 +172,16 @@ async function remove() {
 
       <div v-if="!list.keys.length" class="panel empty">{{ c.keys.none }}</div>
 
-      <section v-for="key in list.keys" :key="key.id" class="panel">
+      <!-- A disabled key refuses alerts, so it must not pass for a working one at a glance: a dashed
+           frame, a red tag where the state is named, what it means in words, and the rest dimmed -->
+      <section v-for="key in list.keys" :key="key.id" class="panel" :class="{ 'panel--off': !key.enabled }">
         <header class="panel-bar">
           <span class="panel-name">{{ key.name }}</span>
-          <span class="panel-status" :class="{ dim: !key.enabled }">
-            <i class="dot" :class="{ 'dot--off': !key.enabled }" /> {{ key.enabled ? c.keys.enabled : c.keys.disabled }}
-          </span>
+          <span v-if="key.enabled" class="panel-status"><i class="dot" /> {{ c.keys.enabled }}</span>
+          <span v-else class="tag-off">{{ c.keys.disabled }}</span>
         </header>
         <div class="panel-body key">
+          <p v-if="!key.enabled" class="say say--error">{{ c.keys.confirmDisable }}</p>
           <dl class="facts">
             <dt>{{ c.keys.instances }}</dt>
             <dd>
@@ -220,6 +222,7 @@ async function remove() {
             <button
               type="button"
               class="act"
+              :class="{ 'act--on': !key.enabled }"
               :disabled="working === key.id"
               :title="key.enabled ? c.keys.confirmDisable : undefined"
               @click="toggleEnabled(key)"
@@ -313,6 +316,23 @@ async function remove() {
 .key {
   display: grid;
   gap: 0.8rem;
+}
+.panel--off {
+  border-style: dashed;
+  border-color: var(--line-strong);
+}
+/* the bar has a line under it only; naming the other sides would draw them */
+.panel--off .panel-bar {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--line-strong);
+}
+.panel--off .panel-name {
+  color: var(--dim);
+}
+/* what the key is stays readable, but stands back; the actions do not, enabling it least of all */
+.panel--off .facts,
+.panel--off .meta {
+  opacity: 0.55;
 }
 .facts {
   display: grid;

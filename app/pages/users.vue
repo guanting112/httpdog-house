@@ -125,13 +125,13 @@ async function remove() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in items" :key="user.id">
+          <tr v-for="user in items" :key="user.id" :class="{ 'row-off': user.disabled }">
             <th scope="row" class="nowrap">
               {{ user.username }} <span v-if="user.id === me?.id" class="chip chip--on">{{ c.users.you }}</span>
             </th>
             <td :class="{ amber: user.role === 'admin' }">{{ c.users.roles[user.role] }}</td>
             <td class="nowrap">
-              <span v-if="user.disabled" class="dim"><i class="dot dot--off" /> {{ c.users.disabled }}</span>
+              <span v-if="user.disabled" class="tag-off">{{ c.users.disabled }}</span>
               <template v-else><i class="dot dot--green" /> {{ c.users.active }}</template>
             </td>
             <td class="nowrap dim" :title="stamp(user.createdAt)">{{ c.ago(Math.max(0, now - user.createdAt)) }}</td>
@@ -225,5 +225,10 @@ async function remove() {
 <style scoped>
 .error {
   margin-bottom: 0.9rem;
+}
+/* an account that cannot sign in stands back; the tag in its row says why */
+.row-off th,
+.row-off td {
+  color: var(--dim);
 }
 </style>
