@@ -16,6 +16,11 @@ updates:
     groups:
       packages:
         patterns: ["*"]
+    ignore:
+      # TypeScript 7 no longer ships lib/tsc, which vue-tsc (`nuxt typecheck`) loads: with it,
+      # `make check` stops at the type check. Take this out when vue-tsc works with TypeScript 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
