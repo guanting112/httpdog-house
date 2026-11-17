@@ -13,7 +13,7 @@
 // The file it fills in is the one scripts/deploy-config.ts reads; with DEPLOY_ENV=deploy.<suffix>.env
 // it sets up another deployment in the same account. After this, `make deploy` is all an update needs.
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, constants, existsSync, mkdtempSync, openSync, readFileSync, readSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { USERNAME } from '../server/utils/password'
@@ -231,7 +231,9 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
   } else {
     const later = 'Everything else is in place: run `make admin NAME=you` to make the first admin.'
     let name = ''
-    while (!USERNAME.test(name)) {
+    // Asked again after an answer that is not a name, an empty one included, but not for ever
+    for (let attempt = 0; !USERNAME.test(name); attempt++) {
+      if (attempt === 5) throw new SetupError(`No usable name was given. ${later}`)
       const answer = shell.ask('Username for the first admin (a-z, 0-9, dot, dash, underscore): ')
       // No terminal to answer on (a script, a pipe): the password could not be asked for either
       if (answer === null) throw new SetupError(`There is no admin yet, and nobody to ask for a name. ${later}`)
@@ -247,8 +249,29 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
   }
 }
 
+/**
+ * Throws away what was typed before a question was asked. The steps take a while, and an Enter
+ * pressed during one of them would otherwise be read as the answer to the next question.
+ */
+function discardTypedAhead() {
+  let tty: number
+  try {
+    tty = openSync('/dev/tty', constants.O_RDONLY | constants.O_NONBLOCK)
+  } catch {
+    return
+  }
+  try {
+    const waiting = Buffer.alloc(1024)
+    while (readSync(tty, waiting) > 0);
+  } catch {
+    // nothing more is waiting: reading would have had to wait
+  } finally {
+    closeSync(tty)
+  }
+}
+
 /** The real thing: commands run in the repository, on this terminal */
-function terminal(): Shell {
+export function terminal(): Shell {
   const outputFile = join(mkdtempSync(join(tmpdir(), 'httpdog-house-')), 'wrangler-output.ndjson')
   return {
     async run(command) {
@@ -266,7 +289,12 @@ function terminal(): Shell {
       const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
       return { code: await child.exited, stdout, stderr }
     },
-    ask: (question) => (process.stdin.isTTY ? prompt(question) : null),
+    ask(question) {
+      if (!process.stdin.isTTY) return null
+      discardTypedAhead()
+      // prompt() gives null for an empty line too. On a terminal that is an answer, an empty one
+      return prompt(question) ?? ''
+    },
     accountId: process.env.CLOUDFLARE_ACCOUNT_ID || undefined,
     log: (line) => console.log(line),
     read: (path) => (existsSync(resolve(ROOT, path)) ? readFileSync(resolve(ROOT, path), 'utf8') : null),

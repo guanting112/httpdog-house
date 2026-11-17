@@ -24,6 +24,8 @@ function account(start: {
   accountId?: string
   /** What is typed when asked whether this is the account. Yes, unless a test says otherwise */
   confirm?: string
+  /** What is typed, in turn, when asked for the admin's name */
+  names?: string[]
 }) {
   const state = {
     files: { [LOCAL_EXAMPLE]: EXAMPLE, ...(start.file === undefined ? {} : { [LOCAL]: start.file }) } as Record<string, string>,
@@ -68,7 +70,7 @@ function account(start: {
         state.confirmations.push(question)
         return start.confirm ?? 'y'
       }
-      return ['Not A Name', 'guanting'][state.asked++] ?? 'guanting'
+      return (start.names ?? ['Not A Name', 'guanting'])[state.asked++] ?? 'guanting'
     },
     accountId: start.accountId,
     log: (line) => void state.said.push(line),
@@ -189,6 +191,22 @@ describe('make setup', () => {
       expect(state.ran).toEqual([])
       expect(state.files[LOCAL]).toBeUndefined()
     }
+  })
+
+  // Found on a real run: an Enter pressed during an earlier step came out as an empty answer here,
+  // and an empty answer was taken for having no terminal
+  test('an empty answer to the name is asked again, not taken for nobody being there', async () => {
+    const { state, shell } = account({ names: ['', '   ', 'ops'] })
+    await setup(shell)
+    expect(state.asked).toBe(3)
+    expect(state.ran.at(-1)).toBe('bun scripts/create-admin.ts ops --remote')
+  })
+
+  test('after five answers that are not a name it stops, and says how to make the admin', async () => {
+    const { state, shell } = account({ names: ['', '', '', '', '', 'ops'] })
+    await expect(setup(shell)).rejects.toThrow('make admin NAME=you')
+    expect(state.asked).toBe(5)
+    expect(state.ran.at(-1)).toBe('make --no-print-directory secrets')
   })
 
   test('with no terminal to confirm on, it does nothing', async () => {
