@@ -64,8 +64,8 @@ setup: install ## The first time: log in, create the database, upload both Worke
 
 deploy: check db-migrate deploy-ingest deploy-ui ## Every time after: check, update the tables, upload both Workers
 
-# The hostname alone answers "not found". This is the address that does not
-entry: ## Show the address to sign in at: https://<UI_DOMAIN>/<ENTRY_PATH>
+# The two hostnames alone answer "not found". These are the addresses that do not
+entry: ## Show the two addresses: to sign in at, and for httpdog to send to
 	@$(DEPLOY_CONFIG) entry
 
 ##@ Local development

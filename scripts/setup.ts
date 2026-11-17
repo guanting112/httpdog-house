@@ -5,8 +5,8 @@
 //      it stops, having written the file if it was not there, and says what to put in it
 //   1. log in to Cloudflare if this machine is not logged in, then say which account that is and
 //      go on only after a yes
-//      (and note a new entry path in deploy.local.env, unless it has one: the one address of the
-//      UI that lets a browser in)
+//      (and note two new paths in deploy.local.env, unless it has them: the one address of the UI
+//      that lets a browser in, and the one address the receiver takes alerts at)
 //   2. create the D1 database and note its id in deploy.local.env
 //   3. create the tables
 //   4. upload the receiver, at its hostname
@@ -162,6 +162,13 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
   } else if (!isEntryPath(values().ENTRY_PATH)) {
     throw new SetupError(`ENTRY_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
   }
+  // And the same for the receiver: the piece of its address that nobody would guess
+  if (!values().INGEST_PATH) {
+    set('INGEST_PATH', newEntryPath())
+    shell.log(`noted a new path for the receiver in ${LOCAL}: it will take alerts at that address and answer "not found" at every other`)
+  } else if (!isEntryPath(values().INGEST_PATH)) {
+    throw new SetupError(`INGEST_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
+  }
 
   say('Database')
   if (values().DATABASE_ID) {
@@ -236,7 +243,10 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
     await must(['bun', 'scripts/create-admin.ts', name, '--remote'], `The admin was not created. ${later}`)
   }
 
-  return { ui: entryUrl({ uiDomain: domains.uiDomain, entryPath: values().ENTRY_PATH! }), receiver: ingestUrl(domains) }
+  return {
+    ui: entryUrl({ uiDomain: domains.uiDomain, entryPath: values().ENTRY_PATH! }),
+    receiver: ingestUrl({ ingestDomain: domains.ingestDomain, ingestPath: values().INGEST_PATH! }),
+  }
 }
 
 /**
@@ -294,7 +304,8 @@ if (import.meta.main) {
     console.log('')
     console.log('  Keep the sign-in address: it is the only one that lets a browser in. The hostname alone,')
     console.log('  and every other address, answers "not found" until a browser has been there once.')
-    console.log(`  It is ENTRY_PATH in ${LOCAL}; \`make entry\` shows it again.`)
+    console.log('  The receiver takes alerts at its address only; the keys page shows it for each host.')
+    console.log(`  Both are in ${LOCAL}; \`make entry\` shows them again.`)
     console.log('  A new hostname can take a minute or two to answer, while its certificate is made.')
     console.log('  Next: on the keys page, make a key and follow "set up a host".')
     console.log('  Later: `git pull && make deploy` brings a deployment up to date.')

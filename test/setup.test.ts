@@ -164,17 +164,20 @@ describe('make setup', () => {
     expect(file).toMatchObject({ DATABASE_ID: ID, UI_DOMAIN: 'alerts.example.com', INGEST_DOMAIN: 'hook.example.com' })
     // an entry path was made, and the address to sign in at ends in it: the hostname alone lets nobody in
     expect(isEntryPath(file.ENTRY_PATH)).toBe(true)
-    expect(result).toEqual({ ui: `https://alerts.example.com/${file.ENTRY_PATH}`, receiver: 'https://hook.example.com/alerts' })
+    // and a path for the receiver, another one: knowing where to send alerts does not let anyone in
+    expect(isEntryPath(file.INGEST_PATH)).toBe(true)
+    expect(file.INGEST_PATH).not.toBe(file.ENTRY_PATH)
+    expect(result).toEqual({ ui: `https://alerts.example.com/${file.ENTRY_PATH}`, receiver: `https://hook.example.com/${file.INGEST_PATH}/alerts` })
     // a name the UI would refuse is asked for again
     expect(state.asked).toBe(2)
   })
 
   test('run again, it only brings the deployment up to date', async () => {
-    const file = setEnvValue(setEnvValue(READY, 'DATABASE_ID', ID), 'ENTRY_PATH', 'the-one-already-in-use')
+    const file = setEnvValue(setEnvValue(setEnvValue(READY, 'DATABASE_ID', ID), 'ENTRY_PATH', 'the-one-already-in-use'), 'INGEST_PATH', 'the-one-hosts-send-to')
     const { state, shell } = account({ file, databases: [{ name: 'httpdog-house', uuid: ID }], keyOn: [INGEST_DEPLOY, UI_DEPLOY], admins: 1 })
     const result = await setup(shell)
-    // the entry path people already use is kept
-    expect(result.ui).toBe('https://alerts.example.com/the-one-already-in-use')
+    // the addresses people and hosts already use are kept
+    expect(result).toEqual({ ui: 'https://alerts.example.com/the-one-already-in-use', receiver: 'https://hook.example.com/the-one-hosts-send-to/alerts' })
 
     expect(state.ran).toEqual(['make --no-print-directory db-migrate', 'make --no-print-directory deploy-ingest', 'make --no-print-directory deploy-ui'])
     expect(state.files[LOCAL]).toBe(file)

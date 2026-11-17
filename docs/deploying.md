@@ -14,12 +14,12 @@ cp deploy.local.env.example deploy.local.env
 
 ```
 UI_DOMAIN=alerts.example.com       # where you sign in
-INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.com/alerts
+INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.com/<a path>/alerts
 ```
 
 - **Each is a name under a domain that is in the same Cloudflare account**, and the two are different.
 - **Neither has a DNS record yet.** Each becomes a Custom Domain of its Worker: Cloudflare makes the DNS record and the certificate when the Worker is uploaded, so there is nothing to add by hand. A new hostname can take a minute or two to answer.
-- **A hostname is not a secret.** The certificate made for it is logged in public, as certificates are, and scanners visit every hostname they learn of. So the UI shows a stranger nothing: see [the sign-in address](#the-sign-in-address) below. A name that does not say what it is for gives less away still. The receiver has to stay open to your hosts; it answers "not found" to anything but an alert.
+- **A hostname is not a secret.** The certificate made for it is logged in public, as certificates are, and scanners visit every hostname they learn of. So the UI shows a stranger nothing: see [the sign-in address](#the-sign-in-address) below. A name that does not say what it is for gives less away still. The receiver has to stay open to your hosts, so it takes alerts at one address that nobody would guess, and answers "not found" at every other: see [the receiver's address](#the-receivers-address).
 - **Changing a hostname later** is the same two lines and `make deploy`. Hosts then need the new address in `HTTPDOG_WEBHOOK_URL`, and alerts sent to the old one are lost.
 
 `make setup` in a checkout that has no `deploy.local.env` writes the file for you, says the above, and stops.
@@ -29,7 +29,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 | Step | What happens |
 |---|---|
 | Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created |
-| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` in `deploy.local.env`, unless there is one |
+| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` and a new `INGEST_PATH` in `deploy.local.env`, unless they are there |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
 | 4. Receiver | Uploads the ingest Worker at `INGEST_DOMAIN`. Cloudflare makes the hostname's DNS record and certificate |
@@ -56,6 +56,20 @@ It is the one address of the UI that answers a browser it has not seen. Everythi
 - **It is not a password.** It keeps strangers and scanners from seeing what is here; what protects the alerts is still the login behind it. The address ends up in browser histories and in whatever it was sent through, so treat it as something to keep to yourselves, and change it when someone leaves.
 - **On a machine there is no door**: `make dev` and `make preview` answer at every address.
 
+## The receiver's address
+
+```
+https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts
+```
+
+It is what goes in `HTTPDOG_WEBHOOK_URL` on a host, and the keys page shows it with the rest of what a host needs. The receiver takes alerts there and nowhere else: the hostname alone, the plain `/alerts` and every other address answer `not found`, and a request that is not at the address is not read, checked or noted.
+
+- **A stranger cannot send it anything.** Without the path there is no request to refuse, so nothing a stranger does shows up on the **rejected** page or costs a write to the database. What is listed there comes from someone who has the address: a host of yours with a wrong secret, a name no key lists, or a clock that is off.
+- **The signature is still what lets an alert in.** The path only decides who can try.
+- **`INGEST_PATH` is in `deploy.local.env`.** `make setup` makes one of 30 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
+- **Leave it as it is once hosts send to it.** Changing it is changing `HTTPDOG_WEBHOOK_URL` on every host, and alerts sent to the old address in the meantime are lost: httpdog tries 3 times and gives up. If it has to change, set the new one, run `make deploy`, then update the hosts straight away.
+- **On a machine there is no path**: `make dev` takes alerts at `/alerts`.
+
 ## Every time after: `make deploy`
 
 `make deploy` runs the checks, updates the tables and uploads both Workers. `make deploy-ingest` and `make deploy-ui` upload one each.
@@ -66,9 +80,10 @@ The one place for what differs from one deployment to the next:
 
 | Value | Meaning |
 |---|---|
-| `UI_DOMAIN`, `INGEST_DOMAIN` | **Required, and yours to fill in.** The two hostnames, see above. The address httpdog is given follows from the second: `https://<INGEST_DOMAIN>/alerts` |
+| `UI_DOMAIN`, `INGEST_DOMAIN` | **Required, and yours to fill in.** The two hostnames, see above |
 | `DATABASE_ID` | The id of the D1 database. Filled in by `make setup` |
 | `ENTRY_PATH` | The last piece of the sign-in address, see above. Filled in by `make setup` unless you set one |
+| `INGEST_PATH` | The piece of the receiver's address before `/alerts`, see above. Filled in by `make setup` unless you set one |
 | `NAME_SUFFIX` | Only for another deployment in the same account, see below |
 | `RETENTION_DAYS`, `MAX_SKEW_SECS` | Settings of the receiver, see below |
 

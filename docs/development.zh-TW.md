@@ -70,13 +70,14 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 
 ## 驗證過的範圍
 
-- `make check`:型別檢查,以及 105 個測試。其中 86 個是單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),從 `deploy.local.env` 產生的設定檔,以及 `make setup` 的每一步(對象是只存在於測試裡的帳號)。
+- `make check`:型別檢查,以及 110 個測試。其中 90 個是單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),從 `deploy.local.env` 產生的設定檔,以及 `make setup` 的每一步(對象是只存在於測試裡的帳號)。
 - 用幾份虛構的 `deploy.*.env`(其中一份有 `NAME_SUFFIX`),`wrangler deploy --dry-run` 接受了兩個 Worker 產生出來的設定檔。
 - 用不會動到任何東西的假 wrangler 與假 make,把 `make setup` 從頭跑到尾:第一次執行、第二次執行(發現一切都已就緒),以及沒有終端機可以詢問的情況。第一次執行也在 pseudo-terminal 裡實際操作過:輸入 yes、名稱與密碼,並在前面某一步進行時按了一次 Enter。那個 Enter 曾經被當成下一個問題的答案,現在會被丟掉。
-- Fuzzing:另外 19 個測試是 `test/fuzz.test.ts` 裡的性質,在 `make check` 中每個用 200 組產生出來的輸入去試,在 `make fuzz` 中則是 20,000 組。涵蓋接收端(沒有簽章的請求不會被存下來,也不會得到錯誤回應;已簽章的告警不論欄位裡放什麼都只存一次;簽章後被改過的內容、沒有金鑰登記的 instance 都會被拒絕)、簽章、secret 的加密、instance 樣式、頁面上顯示的文字與語法上色,以及 `deploy.local.env`。最初幾次執行找到三個問題,都已修正:會反轉文字方向的 U+061C 原本會照原樣顯示;已簽章的告警裡像 `1e300` 這樣的數字原本會被當成時間存下來;寫進 `deploy.local.env` 的值,原本可能因為值裡的 `$` 或被取代那一行裡的 `\r` 而走樣。
+- Fuzzing:另外 20 個測試是 `test/fuzz.test.ts` 裡的性質,在 `make check` 中每個用 200 組產生出來的輸入去試,在 `make fuzz` 中則是 20,000 組。涵蓋接收端(沒有簽章的請求不會被存下來,也不會得到錯誤回應;已簽章的告警不論欄位裡放什麼都只存一次;簽章後被改過的內容、沒有金鑰登記的 instance 都會被拒絕)、簽章、secret 的加密、instance 樣式、頁面上顯示的文字與語法上色,以及 `deploy.local.env`。最初幾次執行找到三個問題,都已修正:會反轉文字方向的 U+061C 原本會照原樣顯示;已簽章的告警裡像 `1e300` 這樣的數字原本會被當成時間存下來;寫進 `deploy.local.env` 的值,原本可能因為值裡的 `$` 或被取代那一行裡的 `\r` 而走樣。
 - 在一台機器上(macOS、wrangler 4.163.0),兩個 Worker 都跑在 wrangler 的本機執行環境裡:真的 `httpdog` 執行檔重播 `sample.log`,3 則已簽章的告警都送達;改用錯的 secret 時,9 次嘗試全部被拒絕並留下紀錄。
 - 用 headless Chrome 對 build 後的介面測試,HTTP 與 HTTPS 都跑過:登入、新告警即時出現、篩選、金鑰的建立、編輯、停用與刪除(每一步之後都檢查接收端的回應)、viewer 被擋在管理頁面與管理 API 之外、變更密碼,以及兩種語言、兩種主題在桌機與手機寬度下的頁面。
 - 門:在一台機器上,用 wrangler 執行 build 後的介面,並設定了入口路徑。沒有 cookie 時,頁面、API、`/favicon.svg`、`/robots.txt` 和 script 檔案得到的都是完全相同的 `404 not found`,偽造的 cookie 和另一個入口路徑的 cookie 也一樣。入口網址回的是導向 `/login` 的重新導向和 cookie;帶著它之後,頁面、API 與檔案都照常回應,檔案帶著原本的快取標頭,條件式請求得到 `304`。headless Chrome 在 `/` 與 `/login` 看到的是 `not found`,走過入口網址之後看到登入頁。沒有在 Cloudflare 上驗證。
+- 設定了路徑的接收端,在一台機器上用 wrangler 執行:`/`、`/alerts`、`/health` 和差一個字元的路徑都回 `404 not found`;在它的位址上,`/health` 回 `200`、`GET` 回 `405`、沒有簽章的 `POST` 回 `401`。沒有在 Cloudflare 上驗證。
 - 在 GitHub 的 Linux runner 上:`check.yml`(`make check` 與 `make dry-run`)與 `fuzz.yml`(每個性質 5,000 組輸入)第一次執行就通過。
 - **沒有驗證:`codeql.yml` 與 `scorecard.yml`。** repository 還是 private 時它們會被略過,所以還沒有執行過。
 - **沒有驗證:Cloudflare 上的任何東西。** 還沒有部署過,所以對真實帳號執行 `make setup`、真正的 D1、速率限制、每日排程,以及免費方案的 CPU 上限都沒有測過。

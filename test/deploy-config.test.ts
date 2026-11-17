@@ -7,9 +7,12 @@ const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
 /** What every deployment has to have: its two hostnames */
 const HOSTS = { UI_DOMAIN: 'alerts.example.com', INGEST_DOMAIN: 'hook.example.com' }
 const ENTRY = 'a-name-nobody-would-guess'
+const INGEST = 'another-name-not-to-guess'
+/** Where httpdog POSTs, with those */
+const ADDRESS = `https://hook.example.com/${INGEST}/alerts`
 /** A file that is complete */
-const FILE = { ...HOSTS, DATABASE_ID: ID, ENTRY_PATH: ENTRY }
-const VALUES = { databaseId: ID, uiDomain: 'alerts.example.com', ingestDomain: 'hook.example.com', entryPath: ENTRY }
+const FILE = { ...HOSTS, DATABASE_ID: ID, ENTRY_PATH: ENTRY, INGEST_PATH: INGEST }
+const VALUES = { databaseId: ID, uiDomain: 'alerts.example.com', ingestDomain: 'hook.example.com', entryPath: ENTRY, ingestPath: INGEST }
 const template = (path: string) => Bun.JSONC.parse(readFileSync(resolve(import.meta.dir, '..', path), 'utf8')) as WranglerConfig
 
 describe('deploy.local.env', () => {
@@ -61,11 +64,11 @@ describe('the two hostnames', () => {
     expect(readDomains({ UI_DOMAIN: 'Alerts.Example.com', INGEST_DOMAIN: 'hook.example.com' })).toEqual({ uiDomain: 'alerts.example.com', ingestDomain: 'hook.example.com' })
   })
 
-  test('the address httpdog is given follows from the receiver hostname, and from nothing else', () => {
-    expect(ingestUrl(VALUES)).toBe('https://hook.example.com/alerts')
+  test('the address httpdog is given follows from the receiver hostname and its path, and from nothing else', () => {
+    expect(ingestUrl(VALUES)).toBe(ADDRESS)
     // a line left by an older file is not read
     const values = readValues({ ...FILE, INGEST_URL: 'https://httpdog-house-ingest.someone.workers.dev/alerts' })
-    expect(applyValues(template('wrangler.jsonc'), values, 'ui').vars).toMatchObject({ INGEST_URL: 'https://hook.example.com/alerts' })
+    expect(applyValues(template('wrangler.jsonc'), values, 'ui').vars).toMatchObject({ INGEST_URL: ADDRESS })
   })
 })
 
@@ -78,9 +81,22 @@ describe('the entry path', () => {
   })
 
   test('the UI gets it, the receiver does not, and the sign-in address ends in it', () => {
-    expect(applyValues(template('wrangler.jsonc'), VALUES, 'ui').vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts', ENTRY_PATH: ENTRY })
-    expect(applyValues(template('ingest/wrangler.jsonc'), VALUES, 'ingest').vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365' })
+    expect(applyValues(template('wrangler.jsonc'), VALUES, 'ui').vars).toEqual({ INGEST_URL: ADDRESS, ENTRY_PATH: ENTRY })
+    expect(applyValues(template('ingest/wrangler.jsonc'), VALUES, 'ingest').vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365', INGEST_PATH: INGEST })
     expect(entryUrl(VALUES)).toBe(`https://alerts.example.com/${ENTRY}`)
+  })
+
+  test('the receiver has a path of its own, and no deploy goes on without it: it would take requests from anyone at /alerts', () => {
+    const { INGEST_PATH: _, ...without } = FILE
+    expect(() => readValues(without)).toThrow('INGEST_PATH is not set')
+    for (const bad of ['short', 'two/parts-here', 'alerts']) expect(() => readValues({ ...FILE, INGEST_PATH: bad })).toThrow('INGEST_PATH')
+    // the receiver is told its path, the UI only the whole address to show
+    expect(applyValues(template('ingest/wrangler.jsonc'), VALUES, 'ingest').vars?.INGEST_PATH).toBe(INGEST)
+    expect(applyValues(template('wrangler.jsonc'), VALUES, 'ui').vars?.INGEST_PATH).toBeUndefined()
+    // and the committed config has none
+    const ingest = template('ingest/wrangler.jsonc')
+    expect(ingest.vars?.INGEST_PATH).toBeUndefined()
+    expect(leak({ ...ingest, vars: { ...ingest.vars, INGEST_PATH: INGEST } })).toBe("the receiver's path")
   })
 
   test('the committed config asks for every request to reach the Worker first, and has no entry path', () => {
@@ -152,13 +168,13 @@ describe('generated configs', () => {
   test('each Worker is served from its own hostname and from nowhere else', () => {
     const ui = applyValues(template('wrangler.jsonc'), VALUES, 'ui')
     expect(ui.d1_databases![0]!.database_id).toBe(ID)
-    expect(ui.vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts', ENTRY_PATH: ENTRY })
+    expect(ui.vars).toEqual({ INGEST_URL: ADDRESS, ENTRY_PATH: ENTRY })
     expect(ui.routes).toEqual([{ pattern: 'alerts.example.com', custom_domain: true }])
     expect([ui.workers_dev, ui.preview_urls]).toEqual([false, false])
 
     const ingest = applyValues(template('ingest/wrangler.jsonc'), VALUES, 'ingest')
     expect(ingest.d1_databases![0]!.database_id).toBe(ID)
-    expect(ingest.vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365' })
+    expect(ingest.vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365', INGEST_PATH: INGEST })
     expect(ingest.routes).toEqual([{ pattern: 'hook.example.com', custom_domain: true }])
     expect([ingest.workers_dev, ingest.preview_urls]).toEqual([false, false])
   })
@@ -172,11 +188,11 @@ describe('generated configs', () => {
 
   test('the receiver gets its settings, and keeps its defaults for those left empty', () => {
     const ingestVars = (env: Record<string, string>) => applyValues(template('ingest/wrangler.jsonc'), readValues({ ...FILE, ...env }), 'ingest').vars
-    expect(ingestVars({ RETENTION_DAYS: '', MAX_SKEW_SECS: '' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365' })
-    expect(ingestVars({ RETENTION_DAYS: '30' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '30' })
-    expect(ingestVars({ RETENTION_DAYS: '0', MAX_SKEW_SECS: '0600' })).toEqual({ MAX_SKEW_SECS: '600', RETENTION_DAYS: '0' })
+    expect(ingestVars({ RETENTION_DAYS: '', MAX_SKEW_SECS: '' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365', INGEST_PATH: INGEST })
+    expect(ingestVars({ RETENTION_DAYS: '30' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '30', INGEST_PATH: INGEST })
+    expect(ingestVars({ RETENTION_DAYS: '0', MAX_SKEW_SECS: '0600' })).toEqual({ MAX_SKEW_SECS: '600', RETENTION_DAYS: '0', INGEST_PATH: INGEST })
     // they are the receiver's alone
-    expect(applyValues(template('wrangler.jsonc'), readValues({ ...FILE, RETENTION_DAYS: '30' }), 'ui').vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts', ENTRY_PATH: ENTRY })
+    expect(applyValues(template('wrangler.jsonc'), readValues({ ...FILE, RETENTION_DAYS: '30' }), 'ui').vars).toEqual({ INGEST_URL: ADDRESS, ENTRY_PATH: ENTRY })
   })
 
   test('a setting that is not a whole number stops the deploy, since the receiver would quietly use its default', () => {

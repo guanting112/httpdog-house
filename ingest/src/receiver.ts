@@ -1,6 +1,10 @@
 // Everything the receiving Worker does: check that a request really came from an httpdog it
 // knows, then store the alert in D1. index.ts only hands requests and the daily timer to this file.
 //
+// Where: at <INGEST_PATH>/alerts and nowhere else. The hostname is public, so anything a stranger
+// can reach is something a stranger can send to: every other address answers "not found", the
+// plain /alerts included, and a request that is not at the address is not read, checked or noted.
+//
 // The contract is httpdog's docs/webhook.md:
 //   POST, body = one JSON alert
 //   X-Httpdog-Timestamp: <unix seconds>
@@ -22,6 +26,11 @@ export interface Env {
   MAX_SKEW_SECS?: string
   /** Alerts older than this many days are deleted once a day. 0 keeps them forever. Default 365 */
   RETENTION_DAYS?: string
+  /**
+   * The piece of the address before /alerts that nobody would guess: httpdog POSTs to
+   * /<INGEST_PATH>/alerts. Set in every deployment. Absent on a machine, where the address is /alerts
+   */
+  INGEST_PATH?: string
 }
 
 const ALERTS_PATH = '/alerts'
@@ -39,8 +48,9 @@ const SIGNATURE = /^sha256=([0-9a-f]{64})$/
 
 export async function handleRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url)
-  if (url.pathname === '/health') return reply(200, 'ok')
-  if (url.pathname !== ALERTS_PATH) return reply(404, 'not found')
+  const base = env.INGEST_PATH ? `/${env.INGEST_PATH}` : ''
+  if (url.pathname === `${base}/health`) return reply(200, 'ok')
+  if (url.pathname !== `${base}${ALERTS_PATH}`) return reply(404, 'not found')
   if (request.method !== 'POST') return reply(405, 'method not allowed', { allow: 'POST' })
   try {
     return await receive(request, env, ctx)

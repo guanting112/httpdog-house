@@ -301,6 +301,49 @@ describe('other requests', () => {
   })
 })
 
+// A deployment's receiver has a piece in its address that nobody would guess (INGEST_PATH)
+describe('a receiver with a path of its own', () => {
+  const PATH = 'a-path-nobody-would-guess'
+  const at = (rest: string) => `https://hook.example.com/${PATH}${rest}`
+
+  beforeEach(() => {
+    env.INGEST_PATH = PATH
+  })
+
+  test('takes alerts at its address', async () => {
+    expect((await send(alertBody(), { url: at('/alerts') })).status).toBe(204)
+    expect(count('alerts')).toBe(1)
+    expect((await send('', { method: 'GET', url: at('/health') })).status).toBe(200)
+    expect((await send('', { method: 'GET', url: at('/alerts') })).status).toBe(405)
+  })
+
+  test('answers "not found" everywhere else, to a correctly signed alert too, and notes nothing', async () => {
+    for (const url of [
+      'https://hook.example.com/alerts',
+      'https://hook.example.com/health',
+      'https://hook.example.com/',
+      `https://hook.example.com/${PATH}`,
+      `https://hook.example.com/${PATH}/`,
+      `https://hook.example.com/${PATH.toUpperCase()}/alerts`,
+      `https://hook.example.com/x/${PATH}/alerts`,
+      `https://hook.example.com/${PATH}x/alerts`,
+      `https://hook.example.com/${PATH}/alerts/`,
+    ]) {
+      const response = await send(alertBody(), { url })
+      expect(response.status).toBe(404)
+      expect(await response.text()).toBe('not found\n')
+    }
+    // not even as a refusal: a stranger cannot put a line on the rejected page
+    expect(count('alerts')).toBe(0)
+    expect(count('rejections')).toBe(0)
+  })
+
+  test('a wrong secret at the right address is still refused and still noted: that is a host of yours', async () => {
+    expect((await send(alertBody(), { url: at('/alerts'), secret: 'not-the-secret-of-any-key-0123456789' })).status).toBe(401)
+    expect(rejections()).toMatchObject([{ reason: 'bad_signature', instance: 'web-01' }])
+  })
+})
+
 describe('the daily clean-up', () => {
   test('deletes what is past the retention period and keeps the rest', async () => {
     await send(alertBody({ group: 'old' }))

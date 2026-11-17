@@ -44,7 +44,7 @@ A **key** is one HMAC secret plus the list of instances allowed to use it.
 
 ## What the receiver answers
 
-`POST /alerts` is the only address that takes alerts. The contract is httpdog's [docs/webhook.md](https://github.com/guanting112/httpdog/blob/main/docs/webhook.md).
+`POST /<INGEST_PATH>/alerts` is the only address that takes alerts; on a machine, where there is no path, it is `POST /alerts`. Every other address answers `404 not found`, and what is sent there is not read. The contract is httpdog's [docs/webhook.md](https://github.com/guanting112/httpdog/blob/main/docs/webhook.md).
 
 | Status | When |
 |---|---|
@@ -54,7 +54,7 @@ A **key** is one HMAC secret plus the list of instances allowed to use it.
 | `413` | The body is over 256 KiB |
 | `500` | Storing failed, or a key could not be decrypted (the Workers have different `SECRETS_KEY` values). httpdog tries again |
 
-The answer never says which check failed; the reason is on the **rejected** page. `GET /health` answers `200 ok` and touches nothing.
+The answer never says which check failed; the reason is on the **rejected** page. `GET /<INGEST_PATH>/health` answers `200 ok` and touches nothing.
 
 ## Accounts
 
@@ -82,6 +82,7 @@ Tables are in `migrations/0001_init.sql`.
 - **Passwords** are stored as PBKDF2-HMAC-SHA256 with 100,000 iterations, the most the Workers runtime allows, with a minimum length of 10. Sign-in is limited to 10 attempts a minute per address.
 - **Sessions** are a random token in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie; the database holds only its SHA-256.
 - **A stranger is shown nothing.** The UI answers `not found` to every request, for a page, the API or a file, from a browser that does not carry the cookie of the sign-in address (`shared/door.ts`, `server/middleware/01.door.ts`). The cookie is the SHA-256 of the entry path, so it does not give the path away, and it is `HttpOnly`. This is so that the hostname, which is public, leads nowhere; the login behind it is what guards the data.
+- **A stranger cannot send anything.** The receiver takes alerts at one address with a piece nobody would guess, and answers `not found` at every other without reading the request. So the refusals on the **rejected** page, and the writes they cost, can only be caused by someone who has the address.
 - **The API checks every request itself** (`server/middleware/guard.ts`): a session for everything, an admin for `/api/admin`, and for anything that changes data, that the request came from this site's own pages.
 - **Text from access logs is shown as text.** No markup is ever built from it, control characters and direction-reversing marks are shown as escapes, and the pages carry a Content-Security-Policy that allows only this site's own scripts.
 - **Worth adding in the Cloudflare dashboard**: Cloudflare Access in front of the UI's hostname, and a rate limiting rule on the receiver's hostname.

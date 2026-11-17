@@ -44,7 +44,7 @@ httpdog (db-01)  ──┘   已簽章             驗證、儲存              
 
 ## 接收端的回應
 
-`POST /alerts` 是唯一接收告警的位址。合約以 httpdog 的 [docs/webhook.md](https://github.com/guanting112/httpdog/blob/main/docs/webhook.md) 為準。
+`POST /<INGEST_PATH>/alerts` 是唯一接收告警的位址;在本機上沒有這段路徑,就是 `POST /alerts`。其他位址一律回 `404 not found`,送到那裡的內容不會被讀取。合約以 httpdog 的 [docs/webhook.md](https://github.com/guanting112/httpdog/blob/main/docs/webhook.md) 為準。
 
 | 狀態碼 | 情況 |
 |---|---|
@@ -54,7 +54,7 @@ httpdog (db-01)  ──┘   已簽章             驗證、儲存              
 | `413` | 內容超過 256 KiB |
 | `500` | 儲存失敗,或金鑰無法解密(兩個 Worker 的 `SECRETS_KEY` 不同)。httpdog 會重試 |
 
-回應不會說明是哪一項檢查沒過;原因在 **rejected** 頁面上。`GET /health` 回 `200 ok`,不碰任何資料。
+回應不會說明是哪一項檢查沒過;原因在 **rejected** 頁面上。`GET /<INGEST_PATH>/health` 回 `200 ok`,不碰任何資料。
 
 ## 帳號
 
@@ -82,6 +82,7 @@ httpdog (db-01)  ──┘   已簽章             驗證、儲存              
 - **密碼**以 PBKDF2-HMAC-SHA256 儲存,迭代 100,000 次(Workers 執行環境允許的上限),長度至少 10。登入限制為每個位址每分鐘 10 次。
 - **Session** 是放在 `HttpOnly`、`Secure`、`SameSite=Strict` cookie 裡的隨機 token;資料庫只存它的 SHA-256。
 - **陌生人什麼都看不到。** 瀏覽器沒有帶登入網址發的 cookie 時,不論要的是頁面、API 還是檔案,介面一律回 `not found`(`shared/door.ts`、`server/middleware/01.door.ts`)。cookie 是入口路徑的 SHA-256,所以不會洩漏路徑本身,而且是 `HttpOnly`。這是為了讓公開的主機名稱通不到任何地方;保護資料的仍然是後面的登入。
+- **陌生人送不了任何東西。** 接收端只在一個帶有猜不到的路徑的位址上收告警,其他位址一律回 `not found`,而且不讀取請求。所以 **rejected** 頁面上的拒絕紀錄,以及它們消耗的寫入,只可能是知道這個位址的人造成的。
 - **API 自己檢查每一個請求**(`server/middleware/guard.ts`):所有請求都要有 session,`/api/admin` 要是 admin,而會變更資料的請求必須來自這個網站自己的頁面。
 - **來自 access log 的文字一律當作文字顯示。** 絕不會用它組出任何標記;控制字元與反轉文字方向的符號會顯示成跳脫形式;頁面帶有 Content-Security-Policy,只允許執行這個網站自己的 script。
 - **建議在 Cloudflare 後台加上**:在介面的網域前面放 Cloudflare Access,並在接收端的網域上設一條速率限制規則。

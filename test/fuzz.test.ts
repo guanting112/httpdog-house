@@ -218,12 +218,12 @@ describe('fuzz: receiver', () => {
   let open: { close(): void } | undefined
   afterAll(() => open?.close())
 
-  /** A receiver with an empty database and one key, for web-* and db-01 */
-  function receiver() {
+  /** A receiver with an empty database and one key, for web-* and db-01. With a path, it is a deployment's: it answers there only */
+  function receiver(ingestPath?: string) {
     open?.close()
     const db = createTestDb()
     open = db.sqlite
-    const env: Env = { DB: db.d1, SECRETS_KEY }
+    const env: Env = { DB: db.d1, SECRETS_KEY, INGEST_PATH: ingestPath }
     const pending: Promise<unknown>[] = []
     const ctx = { waitUntil: (promise: Promise<unknown>) => void pending.push(promise), passThroughOnException: () => {} } as unknown as ExecutionContext
     bucket.tokens = BUCKET_SIZE
@@ -239,6 +239,8 @@ describe('fuzz: receiver', () => {
         return response.status
       },
       alerts: () => db.sqlite.query('SELECT * FROM alerts').all() as Record<string, unknown>[],
+      /** How many refusals were noted: what a stranger could fill the rejected page with */
+      noted: () => (db.sqlite.query('SELECT count(*) AS n FROM rejections').get() as { n: number }).n,
     }
   }
 
@@ -333,6 +335,31 @@ describe('fuzz: receiver', () => {
         const status = await house.send(await signed(changed, original))
         expect([400, 401]).toContain(status)
         expect(house.alerts()).toEqual([])
+      }),
+    )
+  })
+
+  test('away from its address, a deployment\'s receiver answers "not found" and writes nothing, whatever is sent', async () => {
+    const PATH = 'a-path-nobody-would-guess'
+    const elsewhere = fc.oneof(
+      fc.constantFrom('/alerts', '/health', '/', `/${PATH}`, `/${PATH}/`, `/x/${PATH}/alerts`, `/${PATH}/alerts/x`, `/${PATH.slice(1)}/alerts`),
+      fc.string({ unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789-_/.'), maxLength: 40 }).map((text) => `/${text}`),
+    )
+    await fc.assert(
+      fc.asyncProperty(elsewhere, alert(listed), fc.constantFrom('POST', 'GET', 'PUT'), async (path, body, method) => {
+        fc.pre(path !== `/${PATH}/alerts` && path !== `/${PATH}/health`)
+        const house = receiver(PATH)
+        // signed as a host of ours would sign it: the address is what is wrong, nothing else
+        const timestamp = String(now())
+        const signature = await signAlert(SECRET, timestamp, utf8(body))
+        const request = new Request(ADDRESS + path, {
+          method,
+          headers: { 'x-httpdog-timestamp': timestamp, 'x-httpdog-signature': `sha256=${signature}` },
+          body: method === 'GET' ? undefined : body,
+        })
+        expect(await house.send(request)).toBe(404)
+        expect(house.alerts()).toEqual([])
+        expect(house.noted()).toBe(0)
       }),
     )
   })

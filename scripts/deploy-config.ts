@@ -11,7 +11,7 @@
 //   bun scripts/deploy-config.ts built           after `nuxt build`: name the files binding in .output/server/wrangler.json
 //   bun scripts/deploy-config.ts ui              check, then put the values into .output/server/wrangler.json
 //   bun scripts/deploy-config.ts database-name   print the name to create the database with
-//   bun scripts/deploy-config.ts entry           print the address to sign in at
+//   bun scripts/deploy-config.ts entry           print the two addresses: to sign in at, and for httpdog to send to
 //
 // One file is one deployment. A second deployment in the same Cloudflare account has a file of its
 // own with a NAME_SUFFIX, which names its two Workers and its database apart from the first's;
@@ -51,6 +51,8 @@ export interface DeployValues {
   ingestDomain: string
   /** The one path of the UI that lets a browser in (shared/door.ts): the sign-in address is https://<uiDomain>/<it> */
   entryPath: string
+  /** The piece of the receiver's address nobody would guess: httpdog POSTs to https://<ingestDomain>/<it>/alerts */
+  ingestPath: string
   /** Settings of the receiver, as the whole numbers they are written as; undefined leaves the default of ingest/wrangler.jsonc */
   retentionDays?: string
   maxSkewSecs?: string
@@ -132,8 +134,8 @@ export function readDomains(env: Record<string, string>): { uiDomain: string; in
   return { uiDomain, ingestDomain }
 }
 
-/** Where httpdog should POST */
-export const ingestUrl = (values: { ingestDomain: string }) => `https://${values.ingestDomain}/alerts`
+/** Where httpdog should POST: the one address the receiver answers at */
+export const ingestUrl = (values: { ingestDomain: string; ingestPath: string }) => `https://${values.ingestDomain}/${values.ingestPath}/alerts`
 
 /** Where a person goes to sign in: the one address of the UI that answers a browser it has not seen */
 export const entryUrl = (values: { uiDomain: string; entryPath: string }) => `https://${values.uiDomain}/${values.entryPath}`
@@ -152,6 +154,11 @@ export function readValues(env: Record<string, string>): DeployValues {
   if (!entryPath) throw new Error(`ENTRY_PATH is not set in ${LOCAL}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess`)
   if (!isEntryPath(entryPath)) throw new Error(`ENTRY_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<UI_DOMAIN>/<ENTRY_PATH>`)
 
+  // The same for the receiver, which would otherwise take requests from anyone at /alerts
+  const ingestPath = env.INGEST_PATH ?? ''
+  if (!ingestPath) throw new Error(`INGEST_PATH is not set in ${LOCAL}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess. Hosts that already send alerts need the new address afterwards`)
+  if (!isEntryPath(ingestPath)) throw new Error(`INGEST_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts`)
+
   // The receiver falls back to its default for a setting it cannot read, which would hide a typing
   // mistake until alerts were deleted sooner or later than meant. So a mistake stops the deploy here
   const wholeNumber = (name: 'RETENTION_DAYS' | 'MAX_SKEW_SECS', least: number, meaning: string) => {
@@ -163,7 +170,7 @@ export function readValues(env: Record<string, string>): DeployValues {
   const retentionDays = wholeNumber('RETENTION_DAYS', 0, 'the days an alert is kept, or 0 to keep alerts forever')
   const maxSkewSecs = wholeNumber('MAX_SKEW_SECS', 1, "the seconds a request's timestamp may be from the receiver's clock")
 
-  return { databaseId, suffix, uiDomain, ingestDomain, entryPath, retentionDays, maxSkewSecs }
+  return { databaseId, suffix, uiDomain, ingestDomain, entryPath, ingestPath, retentionDays, maxSkewSecs }
 }
 
 /** A copy of a Worker's config with the values in place of the examples */
@@ -182,9 +189,10 @@ export function applyValues(config: WranglerConfig, values: DeployValues, worker
     result.ratelimits = config.ratelimits.map((limiter) => ({ ...limiter, namespace_id: limiterNamespace(limiter.namespace_id ?? '', suffix) }))
   }
   if (worker === 'ui') result.vars = { ...config.vars, INGEST_URL: ingestUrl(values), ENTRY_PATH: values.entryPath }
-  if (worker === 'ingest' && (values.retentionDays || values.maxSkewSecs)) {
+  if (worker === 'ingest') {
     result.vars = {
       ...config.vars,
+      INGEST_PATH: values.ingestPath,
       ...(values.retentionDays ? { RETENTION_DAYS: values.retentionDays } : {}),
       ...(values.maxSkewSecs ? { MAX_SKEW_SECS: values.maxSkewSecs } : {}),
     }
@@ -219,6 +227,7 @@ export function leak(config: WranglerConfig): string | null {
   if (config.routes !== undefined) return 'routes'
   if (config.vars?.INGEST_URL !== undefined && !config.vars.INGEST_URL.includes('.example.')) return 'a real INGEST_URL'
   if (config.vars?.ENTRY_PATH !== undefined) return 'an entry path'
+  if (config.vars?.INGEST_PATH !== undefined) return "the receiver's path"
   return null
 }
 
@@ -246,7 +255,7 @@ function check(): DeployValues {
 
 /** A line of an older file that is no longer read, said once so that it does not sit there misleading */
 function noteOldLines() {
-  if (readLocal().INGEST_URL) console.log(`note: INGEST_URL in ${LOCAL} is no longer read. The receiver's address is https://<INGEST_DOMAIN>/alerts; the line can go`)
+  if (readLocal().INGEST_URL) console.log(`note: INGEST_URL in ${LOCAL} is no longer read. The receiver's address is https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts; the line can go`)
 }
 
 function write(path: string, config: WranglerConfig) {
@@ -270,7 +279,9 @@ if (import.meta.main) {
       write(UI_DEPLOY, ui)
       write(INGEST_DEPLOY, ingest)
     } else if (command === 'entry') {
-      console.log(entryUrl(check()))
+      const values = check()
+      console.log(`sign in:        ${entryUrl(values)}`)
+      console.log(`httpdog POSTs:  ${ingestUrl(values)}`)
     } else if (command === 'database-name') {
       console.log(databaseName(existsSync(resolve(ROOT, LOCAL)) ? readSuffix(readLocal()) : undefined))
     } else if (command === 'built') {

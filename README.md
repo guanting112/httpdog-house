@@ -17,7 +17,7 @@ httpdog (db-01)  ──┘   signed            verify, store            pages an
 - **Yours.** All of it is in your Cloudflare account. The alerts are lines from your access logs, and they go nowhere else.
 - **Every alert is checked.** Each one carries an HMAC signature, and what fails the check is refused. The **rejected** page says why, so a wrong secret or a clock that is off shows up in the UI.
 - **Hard to lose an alert.** The receiver is a small Worker of its own, apart from the UI. A UI update that goes wrong cannot stop alerts from arriving.
-- **Nothing to find.** The hostname alone answers "not found", as does every other address, to a browser that has not been to the one address `make setup` gives you. A scanner that comes across the hostname finds no sign-in page, no title and no file.
+- **Nothing to find.** The hostname alone answers "not found", as does every other address, to a browser that has not been to the one address `make setup` gives you. A scanner that comes across the hostname finds no sign-in page, no title and no file. The receiver is the same: it takes alerts at one address that nobody would guess, and answers "not found" at every other.
 - **Made for reading.** New alerts appear as they arrive, with filters and a search through the whole request. Dark and light, English and 繁體中文, desktop and phone.
 
 ## Deploy it
@@ -57,7 +57,7 @@ make setup
 4. gives both the key that encrypts stored secrets, which is kept nowhere else,
 5. asks for a username and a password, and makes that account the first admin.
 
-It ends with the two addresses: `https://<UI_DOMAIN>/<entry path>` to sign in at, and `https://<INGEST_DOMAIN>/alerts` for your httpdogs. **Keep the first one: it is the only address that lets a browser in.** The hostname alone answers "not found"; once a browser has been to the sign-in address it is remembered. `make entry` shows the address again. A new hostname can take a minute or two to answer. If a step fails, sort out what it says and run `make setup` again: it carries on from where it stopped.
+It ends with the two addresses: `https://<UI_DOMAIN>/<entry path>` to sign in at, and `https://<INGEST_DOMAIN>/<path>/alerts` for your httpdogs. **Keep the first one: it is the only address that lets a browser in.** The hostname alone answers "not found"; once a browser has been to the sign-in address it is remembered. `make entry` shows the address again. A new hostname can take a minute or two to answer. If a step fails, sort out what it says and run `make setup` again: it carries on from where it stopped.
 
 Later, `git pull && make deploy` brings your deployment up to date.
 
@@ -70,7 +70,7 @@ Sign in, open **keys**, and make a key that lists the names of your instances. I
 `/etc/httpdog/secrets.env`:
 
 ```
-HTTPDOG_WEBHOOK_URL=https://<the receiver>/alerts
+HTTPDOG_WEBHOOK_URL=https://<INGEST_DOMAIN>/<the receiver's path>/alerts
 HTTPDOG_WEBHOOK_SECRET=<the secret of a key that lists this instance>
 ```
 
@@ -95,7 +95,7 @@ If httpdog logs `webhook attempt N failed` with a 401, open **rejected**: it lis
 - **Keys.** A key is one secret plus the instance names allowed to use it; `web-*` covers `web-01` and `web-02`. To change a secret without losing alerts, add a second key, move the hosts to it, then delete the old one.
 - **Rejected.** What the receiver turned away is listed with the reason.
 - **People.** An admin manages keys and users; a viewer reads. Accounts are made on the **users** page.
-- **The sign-in address.** `make entry` shows it. A new browser, or a new person, has to open it once before the hostname answers them. To change it, set another `ENTRY_PATH` in `deploy.local.env` and run `make deploy-ui`: every browser then has to go to the new address.
+- **The two addresses.** `make entry` shows them: where to sign in, and where httpdog sends. A new browser, or a new person, has to open the first once before the hostname answers them. To change it, set another `ENTRY_PATH` in `deploy.local.env` and run `make deploy-ui`: every browser then has to go to the new address. The receiver's is best left alone: changing it means changing it on every host.
 - **Locked out.** `make admin NAME=you` gives an account a new password.
 - **How long alerts are kept.** 365 days. To change it, set `RETENTION_DAYS` in `deploy.local.env` and run `make deploy-ingest`; `0` keeps them forever.
 - **Logs.** `make tail-ingest` and `make tail-ui` follow the two Workers live.

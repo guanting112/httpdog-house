@@ -1,4 +1,5 @@
-// The receiving Worker: httpdog POSTs its alerts to <this Worker>/alerts.
+// The receiving Worker: httpdog POSTs its alerts to <this Worker>/<INGEST_PATH>/alerts. Every other
+// address answers "not found"; INGEST_PATH is in ../deploy.local.env, not here.
 //
 // Plain TypeScript with no framework; wrangler bundles src/index.ts as it is. It shares one D1
 // database with the UI Worker (../wrangler.jsonc).
