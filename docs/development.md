@@ -40,8 +40,8 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 | `server/utils/` | Sessions, passwords, input checks |
 | `shared/` | Code both Workers use: `crypto.ts`, `instances.ts`, and the types in `api.ts` |
 | `app/pages/` | One file per page |
-| `app/components/` | `AlertDetail`, `KeySetup`, the header, dialogs, code blocks |
-| `app/content/en.ts`, `zh-tw.ts` | Every word the UI shows, one file per language, same shape. Change both together |
+| `app/components/` | `AlertDetail`, `KeySetup`, the header, the language menu and the theme button, dialogs, code blocks |
+| `app/content/en.ts`, `zh-tw.ts` | Every word the UI shows, one file per language, same shape. Change both together. `languages.ts` lists the languages for the menu, each under its own name |
 | `app/assets/css/main.css` | Colours for both themes, type and the shared classes. The dark look is httpdog's website |
 | `migrations/` | The database schema |
 | `scripts/` | `setup.ts` (the first deployment), `deploy-config.ts` (writes the configs to deploy from), `create-admin.ts` and `send-test-alert.ts` |

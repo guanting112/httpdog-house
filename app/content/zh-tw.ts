@@ -8,7 +8,7 @@ const n = (value: number) => value.toLocaleString('en-US')
 export const zhTw: Content = {
   locale: 'zh-tw',
   lang: 'zh-Hant-TW',
-  other: { locale: 'en', label: 'EN' },
+  language: '語言',
 
   nav: {
     alerts: '告警',

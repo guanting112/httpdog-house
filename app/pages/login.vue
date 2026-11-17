@@ -6,8 +6,6 @@ import { nextPath } from '~/lib/route'
 definePageMeta({ layout: false })
 
 const c = useContent()
-const { setLocale } = useLocale()
-const { theme, toggleTheme } = useTheme()
 const { signIn } = useSession()
 const route = useRoute()
 
@@ -56,9 +54,9 @@ async function submit() {
         <p v-if="error" class="say say--error" role="alert">{{ error }}</p>
         <div class="form-actions">
           <button class="btn btn--primary" :disabled="busy">{{ busy ? c.common.working : c.login.submit }}</button>
-          <span class="acts switches">
-            <button type="button" class="act" :aria-label="c.theme.label" @click="toggleTheme">{{ theme === 'dark' ? c.theme.light : c.theme.dark }}</button>
-            <button type="button" class="act" @click="setLocale(c.other.locale)">{{ c.other.label }}</button>
+          <span class="switches">
+            <LangMenu />
+            <ThemeToggle />
           </span>
         </div>
       </div>
@@ -94,7 +92,11 @@ async function submit() {
   font-size: 0.93rem;
 }
 .switches {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-left: auto;
+  font-size: 0.9rem;
 }
 @media (max-width: 640px) {
   .art {

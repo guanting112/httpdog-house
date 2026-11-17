@@ -11,8 +11,8 @@ export const en = {
   locale: 'en' as Locale,
   /** The value of <html lang> */
   lang: 'en',
-  /** The language the switch in the header changes to */
-  other: { locale: 'zh-tw' as Locale, label: '中文' },
+  /** What the language menu is called. The languages in it are in languages.ts, each under its own name */
+  language: 'language',
 
   nav: {
     alerts: 'alerts',

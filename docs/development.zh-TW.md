@@ -40,8 +40,8 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 | `server/utils/` | Session、密碼、輸入檢查 |
 | `shared/` | 兩個 Worker 共用的程式:`crypto.ts`、`instances.ts`,以及 `api.ts` 裡的型別 |
 | `app/pages/` | 一個頁面一個檔案 |
-| `app/components/` | `AlertDetail`、`KeySetup`、頁首、對話框、程式碼區塊 |
-| `app/content/en.ts`、`zh-tw.ts` | 介面上所有的文字,一種語言一個檔案,結構相同。改其中一份就要改另一份 |
+| `app/components/` | `AlertDetail`、`KeySetup`、頁首、語言選單與主題按鈕、對話框、程式碼區塊 |
+| `app/content/en.ts`、`zh-tw.ts` | 介面上所有的文字,一種語言一個檔案,結構相同。改其中一份就要改另一份。`languages.ts` 列出選單裡的語言,每個語言用自己的名稱 |
 | `app/assets/css/main.css` | 兩種主題的顏色、字型與共用的 class。深色外觀沿用 httpdog 的網站 |
 | `migrations/` | 資料庫結構 |
 | `scripts/` | `setup.ts`(第一次部署)、`deploy-config.ts`(產生部署用的設定檔)、`create-admin.ts` 與 `send-test-alert.ts` |

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 // The bar at the top of every page behind the login: where you are, where you can go, who you are.
 const c = useContent()
-const { setLocale } = useLocale()
-const { theme, toggleTheme } = useTheme()
 const { user, isAdmin, signOut } = useSession()
 const route = useRoute()
 
@@ -33,13 +31,8 @@ const links = computed(() => [
         </NuxtLink>
       </nav>
       <div class="tools">
-        <button type="button" class="lang" :lang="c.other.locale === 'zh-tw' ? 'zh-Hant-TW' : 'en'" @click="setLocale(c.other.locale)">
-          {{ c.other.label }}
-        </button>
-        <!-- like the language switch, it names what it changes to -->
-        <button type="button" class="lang" :aria-label="c.theme.label" @click="toggleTheme">
-          {{ theme === 'dark' ? c.theme.light : c.theme.dark }}
-        </button>
+        <LangMenu />
+        <ThemeToggle />
         <NuxtLink v-if="user" class="who" to="/account" :class="{ on: route.path === '/account' }">{{ user.username }}</NuxtLink>
         <button type="button" class="act" @click="signOut">{{ c.nav.signOut }}</button>
       </div>
@@ -99,14 +92,12 @@ const links = computed(() => [
   color: var(--dim);
 }
 .nav a,
-.who,
-.lang {
+.who {
   white-space: nowrap;
   transition: color 0.15s;
 }
 .nav a:hover,
-.who:hover,
-.lang:hover {
+.who:hover {
   color: var(--amber);
 }
 .nav a.on {
@@ -121,6 +112,10 @@ const links = computed(() => [
   align-items: center;
   gap: 1.2rem;
   color: var(--dim);
+}
+/* the language menu and the theme button are one pair: closer to each other than to the rest */
+.tools .theme-toggle {
+  margin-left: -0.7rem;
 }
 .who {
   color: var(--text);
@@ -148,10 +143,31 @@ const links = computed(() => [
 @media (max-width: 860px) {
   .top-in {
     flex-wrap: wrap;
+    column-gap: 1rem;
     padding-top: 0.55rem;
   }
+  /* The tools take what the name of the site leaves, and never a row of their own: when they do
+     not fit, the username is what gives way, cut short with an ellipsis. It is whole on its page */
   .tools {
-    margin-left: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 0.6rem;
+  }
+  .tools > * {
+    flex-shrink: 0;
+  }
+  .tools .who {
+    flex-shrink: 1;
+    min-width: 2.2rem;
+  }
+  .tools .theme-toggle {
+    margin-left: -0.35rem;
+  }
+  /* no box around the language menu here: its arrow is enough to say what it is */
+  .tools .lang-menu {
+    padding-left: 0;
+    border-color: transparent;
   }
   .nav {
     order: 3;
