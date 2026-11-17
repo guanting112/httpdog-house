@@ -56,7 +56,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 給修改這個專案的人:
 
 - **要與 httpdog 保持一致。** 請求內容、標頭與簽章是 httpdog 的對外介面(`docs/webhook.md`、`src/notify.rs`)。`test/shared.test.ts` 用 httpdog 自己測試用的同一組向量檢查簽章。
-- **更新 wrangler。** 它的版本是釘住的,Dependabot 會提議新版本。`scripts/setup.ts` 倚賴它的四個行為,這些是在 4.163.0 的原始碼裡確認的,而測試用的是替身,不會測到:`d1 list --json` 會印出含 `uuid` 與 `name` 的清單;`d1 create --update-config=false` 不會去改 `wrangler.jsonc`;部署時會把 `type` 為 `deploy`、帶有 `targets` 的一行寫進 `WRANGLER_OUTPUT_FILE_PATH` 指定的檔案;沒有人登入時 `whoami --json` 會以錯誤結束。升級前請重新確認。
+- **更新 wrangler。** 它的版本是釘住的,Dependabot 會提議新版本。`scripts/setup.ts` 倚賴它的三個行為,這些是在 4.163.0 的原始碼裡確認的,而測試用的是替身,不會測到:`d1 list --json` 會印出含 `uuid` 與 `name` 的清單;`d1 create --update-config=false` 不會去改 `wrangler.jsonc`;`whoami --json` 會印出登入的是誰和他的帳號,沒有人登入時則以錯誤結束。升級前請重新確認。
 - **Workflow。** Action 一律釘在 commit SHA,每個 workflow 只要求它用得到的權限。它們都沒有 Cloudflare 的憑證,所以都不會部署。
 - **wrangler 與產生出來的設定檔。** build 之後,不帶 `-c` 執行的 wrangler 會使用 Nitro 產生的設定檔。這對部署介面是對的,對其他事情都是錯的,所以 `Makefile` 一律帶 `-c`。
 - **有進版本控制的設定檔裡不放真的值。** 真實部署的資料庫 id、網址或網域一律放在 `deploy.local.env`,不要寫進 `wrangler.jsonc`。要新增這類的值時,在 `deploy.local.env.example` 加一行,並由 `scripts/deploy-config.ts` 填進設定檔。
@@ -69,7 +69,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 
 ## 驗證過的範圍
 
-- `make check`:型別檢查,以及 86 個測試。其中 69 個是單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),從 `deploy.local.env` 產生的設定檔,以及 `make setup` 的每一步(對象是只存在於測試裡的帳號)。
+- `make check`:型別檢查,以及 89 個測試。其中 72 個是單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),從 `deploy.local.env` 產生的設定檔,以及 `make setup` 的每一步(對象是只存在於測試裡的帳號)。
 - 用幾份虛構的 `deploy.*.env`(其中一份有 `NAME_SUFFIX`),`wrangler deploy --dry-run` 接受了兩個 Worker 產生出來的設定檔。
 - 用不會動到任何東西的假 wrangler 與假 make,把 `make setup` 從頭跑到尾:第一次執行、第二次執行(發現一切都已就緒),以及沒有終端機可以詢問的情況。第一次執行也在 pseudo-terminal 裡實際操作過:輸入 yes、名稱與密碼,並在前面某一步進行時按了一次 Enter。那個 Enter 曾經被當成下一個問題的答案,現在會被丟掉。
 - Fuzzing:另外 17 個測試是 `test/fuzz.test.ts` 裡的性質,在 `make check` 中每個用 200 組產生出來的輸入去試,在 `make fuzz` 中則是 20,000 組。涵蓋接收端(沒有簽章的請求不會被存下來,也不會得到錯誤回應;已簽章的告警不論欄位裡放什麼都只存一次;簽章後被改過的內容、沒有金鑰登記的 instance 都會被拒絕)、簽章、secret 的加密、instance 樣式、頁面上顯示的文字與語法上色,以及 `deploy.local.env`。最初幾次執行找到三個問題,都已修正:會反轉文字方向的 U+061C 原本會照原樣顯示;已簽章的告警裡像 `1e300` 這樣的數字原本會被當成時間存下來;寫進 `deploy.local.env` 的值,原本可能因為值裡的 `$` 或被取代那一行裡的 `\r` 而走樣。

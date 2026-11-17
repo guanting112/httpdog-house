@@ -8,9 +8,10 @@
 #   UI Worker       the pages and their API, built by Nuxt         wrangler.jsonc
 #   ingest Worker   receives httpdog's alerts and verifies them    ingest/wrangler.jsonc
 #
-# Those two files are committed and hold example values. What is yours (the database id, the
-# receiver's address, your hostnames) is in deploy.local.env, which is not committed; the targets
-# that reach Cloudflare put it into generated configs (scripts/deploy-config.ts).
+# Those two files are committed and hold example values. What is yours (the database id and the
+# two hostnames of the deployment) is in deploy.local.env, which is not committed; the targets that
+# reach Cloudflare put it into generated configs (scripts/deploy-config.ts). Without the two
+# hostnames none of them goes on: a deployment is never served from workers.dev.
 #
 # These are shortcuts for bun and wrangler commands. Everything is built on this machine and
 # uploaded with wrangler; Cloudflare builds nothing and does not read the Git repository.

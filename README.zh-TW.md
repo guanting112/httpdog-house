@@ -21,27 +21,46 @@ httpdog (db-01)  ──┘   已簽章             驗證、儲存              
 
 ## 部署
 
-需要一個 [Cloudflare](https://dash.cloudflare.com/sign-up) 帳號、[Bun](https://bun.sh),以及 `make`(macOS 與 Linux 內建;Windows 請用 WSL)。
+需要:
+
+- 一個 [Cloudflare](https://dash.cloudflare.com/sign-up) 帳號,而且你的網域已經加在裡面,
+- 這個網域底下兩個還沒有在用的主機名稱:一個用來登入,一個給 httpdog 送告警,
+- [Bun](https://bun.sh),以及 `make`(macOS 與 Linux 內建;Windows 請用 WSL)。
 
 ```bash
 git clone https://github.com/guanting112/httpdog-house.git
 cd httpdog-house
+cp deploy.local.env.example deploy.local.env
+```
+
+把兩個主機名稱填進 `deploy.local.env`:
+
+```
+UI_DOMAIN=alerts.example.com
+INGEST_DOMAIN=hook.example.com
+```
+
+然後:
+
+```bash
 make setup
 ```
+
+**沒有填這兩個主機名稱,`make setup` 什麼都不會建立**:它會停下來,告訴你缺了什麼。部署一律使用你自己的主機名稱,不會用 `workers.dev`。DNS 紀錄和憑證都不用自己加:上傳 Worker 時 Cloudflare 會建立。
 
 `make setup` 就是第一次部署的全部:
 
 1. 還沒登入的話先登入 Cloudflare(會開啟瀏覽器),顯示接下來要用的是哪個帳號,你回答 yes 才會繼續,
 2. 建立資料庫與資料表,
-3. 上傳接收端與介面,
+3. 上傳接收端與介面,各自掛在自己的主機名稱上,
 4. 給兩者同一把用來加密 secret 的金鑰,這把金鑰不會存在其他地方,
 5. 問你使用者名稱與密碼,並把這個帳號設為第一個管理員。
 
-最後它會印出兩個網址:登入用的,以及 httpdog 要 POST 的。如果某一步失敗,照它說的處理後再執行一次 `make setup`,它會從停下來的地方接著做。
+最後它會印出兩個網址:登入用的 `https://<UI_DOMAIN>`,以及給 httpdog 的 `https://<INGEST_DOMAIN>/alerts`。新的主機名稱可能要一兩分鐘才會有回應。如果某一步失敗,照它說的處理後再執行一次 `make setup`,它會從停下來的地方接著做。
 
 之後用 `git pull && make deploy` 更新你的部署。
 
-建議使用付費的 Workers 方案:在免費方案上,登入需要的 CPU 時間可能超過單一請求的上限,這一點還沒有實測。自訂網域、同一個帳號放多套部署、設定與限制,請看 [docs/deploying.zh-TW.md](docs/deploying.zh-TW.md)。
+建議使用付費的 Workers 方案:在免費方案上,登入需要的 CPU 時間可能超過單一請求的上限,這一點還沒有實測。主機名稱怎麼選、同一個帳號放多套部署、設定與限制,請看 [docs/deploying.zh-TW.md](docs/deploying.zh-TW.md)。
 
 ## 接上一台 httpdog
 

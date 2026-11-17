@@ -4,15 +4,36 @@ English | [繁體中文](deploying.zh-TW.md) · back to the [README](../README.m
 
 It was built for Cloudflare from the start: two Workers and one D1 database, in your account. Everything is built on your machine and uploaded with wrangler; Cloudflare builds nothing and does not read the Git repository.
 
+## Before the first time: two hostnames
+
+A deployment is served from two hostnames of your own, and from nowhere else. Nothing is set up without them: `make setup` and every deploy stop when they are missing, and the `workers.dev` address of each Worker is switched off.
+
+```bash
+cp deploy.local.env.example deploy.local.env
+```
+
+```
+UI_DOMAIN=alerts.example.com       # where you sign in
+INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.com/alerts
+```
+
+- **Each is a name under a domain that is in the same Cloudflare account**, and the two are different.
+- **Neither has a DNS record yet.** Each becomes a Custom Domain of its Worker: Cloudflare makes the DNS record and the certificate when the Worker is uploaded, so there is nothing to add by hand. A new hostname can take a minute or two to answer.
+- **A hostname is not a secret.** The certificate made for it is logged in public, as certificates are, so anyone can come across the name. One that does not say what it is for gives less away. What protects the UI is its login; to keep strangers from reaching even the sign-in page, put Cloudflare Access in front of `UI_DOMAIN`. The receiver has to stay open to your hosts.
+- **Changing a hostname later** is the same two lines and `make deploy`. Hosts then need the new address in `HTTPDOG_WEBHOOK_URL`, and alerts sent to the old one are lost.
+
+`make setup` in a checkout that has no `deploy.local.env` writes the file for you, says the above, and stops.
+
 ## The first time: `make setup`
 
 | Step | What happens |
 |---|---|
-| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in and which account that is, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
+| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created |
+| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
-| 4. Receiver | Uploads the ingest Worker and notes its address in `deploy.local.env` |
-| 5. UI | Builds and uploads the UI Worker |
+| 4. Receiver | Uploads the ingest Worker at `INGEST_DOMAIN`. Cloudflare makes the hostname's DNS record and certificate |
+| 5. UI | Builds and uploads the UI Worker at `UI_DOMAIN`, the same way |
 | 6. Key | Generates `SECRETS_KEY` and sets it on both Workers. It encrypts the signing secrets in the database, it is stored nowhere else, and nobody needs to know it |
 | 7. First admin | Asks for a username, then twice for a password. Skipped when there is an admin already |
 
@@ -24,46 +45,30 @@ It is safe to run again. Each step looks at what is there and does only what is 
 
 ## What is yours: `deploy.local.env`
 
-`make setup` writes this file and fills it in. It is the one place for what differs from one deployment to the next:
+The one place for what differs from one deployment to the next:
 
 | Value | Meaning |
 |---|---|
+| `UI_DOMAIN`, `INGEST_DOMAIN` | **Required, and yours to fill in.** The two hostnames, see above. The address httpdog is given follows from the second: `https://<INGEST_DOMAIN>/alerts` |
 | `DATABASE_ID` | The id of the D1 database. Filled in by `make setup` |
-| `INGEST_URL` | Where httpdog should POST, ending in `/alerts`. The keys page shows it. Filled in by `make setup`; follows `INGEST_DOMAIN` when that is set |
-| `UI_DOMAIN`, `INGEST_DOMAIN` | Hostnames of your own, see below |
 | `NAME_SUFFIX` | Only for another deployment in the same account, see below |
 | `RETENTION_DAYS`, `MAX_SKEW_SECS` | Settings of the receiver, see below |
 
 Git ignores the file. The two `wrangler.jsonc` files are committed and keep example values; the deploy targets put your values into generated configs (`wrangler.deploy.json`, `ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too, and `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public fork carries nobody's deployment, and you can deploy from the checkout you push from. Secrets were never in a committed file: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
 
-## Hostnames of your own
-
-Without them, each Worker is served from `<its name>.<your account>.workers.dev`. To use your own, set them in `deploy.local.env` and deploy:
-
-```
-UI_DOMAIN=alerts.example.com
-INGEST_DOMAIN=hook.example.com
-```
-
-```bash
-make deploy
-```
-
-Each zone must be in the same Cloudflare account. The receiver's address then follows `INGEST_DOMAIN`, so leave `INGEST_URL` empty; hosts that were already sending need the new address in `HTTPDOG_WEBHOOK_URL`. To have the hostnames from the first deploy, copy `deploy.local.env.example` to `deploy.local.env` and set them before `make setup`.
-
-With a hostname of its own, the UI can sit behind Cloudflare Access or an IP rule without touching the address your hosts send to.
+A file from before the hostnames were required may hold an `INGEST_URL` line. It is no longer read, and a deploy says so; the line can go.
 
 ## More than one deployment in an account
 
 Each deployment has a file and names of its own:
 
 ```bash
-cp deploy.local.env.example deploy.team-a.env    # then set NAME_SUFFIX=team-a in it
+cp deploy.local.env.example deploy.team-a.env    # then set NAME_SUFFIX=team-a and two hostnames of its own in it
 make setup  DEPLOY_ENV=deploy.team-a.env
 make deploy DEPLOY_ENV=deploy.team-a.env         # later, to update it
 ```
 
-The Workers are then `httpdog-house-ui-team-a` and `httpdog-house-ingest-team-a`, the database is `httpdog-house-team-a`, and the sign-in rate limiter gets a number of its own. Nothing is shared between deployments: each has its own `SECRETS_KEY`, accounts, keys and alerts. Every command that reaches Cloudflare first says which file it read and which Workers it is about to act on. Without `DEPLOY_ENV` the file is `deploy.local.env`, and with no `NAME_SUFFIX` the names are the plain ones. Set the suffix before the first `make setup` and leave it: a new suffix is a new deployment. Files named `deploy.*.env` are ignored by Git.
+The Workers are then `httpdog-house-ui-team-a` and `httpdog-house-ingest-team-a`, the database is `httpdog-house-team-a`, and the sign-in rate limiter gets a number of its own. Nothing is shared between deployments: each has its own hostnames, `SECRETS_KEY`, accounts, keys and alerts. Every command that reaches Cloudflare first says which file it read and which Workers it is about to act on. Without `DEPLOY_ENV` the file is `deploy.local.env`, and with no `NAME_SUFFIX` the names are the plain ones. Set the suffix before the first `make setup` and leave it: a new suffix is a new deployment. Files named `deploy.*.env` are ignored by Git.
 
 ## Settings of the receiver
 

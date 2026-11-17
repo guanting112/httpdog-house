@@ -21,27 +21,46 @@ httpdog (db-01)  ──┘   signed            verify, store            pages an
 
 ## Deploy it
 
-You need a [Cloudflare](https://dash.cloudflare.com/sign-up) account, [Bun](https://bun.sh), and `make` (macOS and Linux have it; on Windows, use WSL).
+You need:
+
+- a [Cloudflare](https://dash.cloudflare.com/sign-up) account with a domain of yours on it,
+- two hostnames under that domain that are not in use yet: one to sign in at, one for httpdog to send to,
+- [Bun](https://bun.sh), and `make` (macOS and Linux have it; on Windows, use WSL).
 
 ```bash
 git clone https://github.com/guanting112/httpdog-house.git
 cd httpdog-house
+cp deploy.local.env.example deploy.local.env
+```
+
+Put the two hostnames in `deploy.local.env`:
+
+```
+UI_DOMAIN=alerts.example.com
+INGEST_DOMAIN=hook.example.com
+```
+
+Then:
+
+```bash
 make setup
 ```
+
+**Without the two hostnames, `make setup` sets nothing up**: it stops and says what is missing. A deployment is always served from hostnames of your own, never from `workers.dev`. There are no DNS records or certificates to add: Cloudflare makes them when the Workers are uploaded.
 
 `make setup` is the whole first deployment:
 
 1. logs in to Cloudflare if you are not logged in (your browser opens), shows which account it is about to use, and goes on only when you say yes,
 2. creates the database and its tables,
-3. uploads the receiver and the UI,
+3. uploads the receiver and the UI, each at its hostname,
 4. gives both the key that encrypts stored secrets, which is kept nowhere else,
 5. asks for a username and a password, and makes that account the first admin.
 
-It ends with two addresses: where to sign in, and where your httpdogs should POST. If a step fails, sort out what it says and run `make setup` again: it carries on from where it stopped.
+It ends with the two addresses: `https://<UI_DOMAIN>` to sign in at, and `https://<INGEST_DOMAIN>/alerts` for your httpdogs. A new hostname can take a minute or two to answer. If a step fails, sort out what it says and run `make setup` again: it carries on from where it stopped.
 
 Later, `git pull && make deploy` brings your deployment up to date.
 
-The paid Workers plan is the safe choice: on the free plan, signing in may need more CPU time than a request gets, and that has not been tested. Hostnames of your own, several deployments in one account, the settings and the limits are in [docs/deploying.md](docs/deploying.md).
+The paid Workers plan is the safe choice: on the free plan, signing in may need more CPU time than a request gets, and that has not been tested. Choosing the hostnames, several deployments in one account, the settings and the limits are in [docs/deploying.md](docs/deploying.md).
 
 ## Connect an httpdog
 

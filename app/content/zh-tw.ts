@@ -148,7 +148,7 @@ export const zhTw: Content = {
     lead: '一把金鑰就是一組 HMAC secret,加上可以使用它的 instance。接收端先從告警裡讀出 instance 名稱,再用所有登記了這個名稱、而且啟用中的金鑰驗證簽章。',
     add: '新增金鑰',
     ingest: 'httpdog 要送到的網址',
-    ingestUnset: 'INGEST_URL 還是範例值。請在 wrangler.jsonc 改成 ingest Worker 的網址,再重新部署 UI。',
+    ingestUnset: '這是範例網址,不是你的。請用 `make deploy-ui` 部署介面:它會從 deploy.local.env 的 INGEST_DOMAIN 取得網址。',
     none: '還沒有金鑰。在有金鑰之前,所有告警都會被拒絕。',
     enabled: '啟用中',
     disabled: '已停用',

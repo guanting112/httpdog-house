@@ -1,7 +1,10 @@
-// Keeps what is yours out of the repository. The real database id, the receiver's address and your
-// hostnames live in deploy.local.env, which is not committed; this script puts them into the
-// configs wrangler deploys from. The two wrangler.jsonc files that are committed keep their example
-// values, so a clone of the repository never carries anybody's deployment.
+// Keeps what is yours out of the repository. The real database id and your two hostnames live in
+// deploy.local.env, which is not committed; this script puts them into the configs wrangler deploys
+// from. The two wrangler.jsonc files that are committed keep their example values, so a clone of
+// the repository never carries anybody's deployment.
+//
+// A deployment is always at two hostnames of your own, never on workers.dev: without UI_DOMAIN and
+// INGEST_DOMAIN in the file, nothing here goes on.
 //
 //   bun scripts/deploy-config.ts check           stop unless the file is usable and the committed configs are still examples
 //   bun scripts/deploy-config.ts configs         check, then write wrangler.deploy.json and ingest/wrangler.deploy.json
@@ -12,8 +15,8 @@
 // own with a NAME_SUFFIX, which names its two Workers and its database apart from the first's;
 // DEPLOY_ENV in the environment says which file to read (the Makefile passes it on).
 //
-// The Makefile runs these; nothing here uploads anything. scripts/setup.ts fills in the file on a
-// first deployment.
+// The Makefile runs these; nothing here uploads anything. On a first deployment scripts/setup.ts
+// fills in the rest of the file, once the two hostnames are in it.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -39,10 +42,10 @@ export interface DeployValues {
   databaseId: string
   /** Added to the names of both Workers and the database: what tells two deployments in one account apart */
   suffix?: string
-  /** Where httpdog should POST; undefined leaves the example in place */
-  ingestUrl?: string
-  uiDomain?: string
-  ingestDomain?: string
+  /** The hostname people sign in at */
+  uiDomain: string
+  /** The hostname httpdog POSTs to. The receiver's address follows from it: https://<it>/alerts */
+  ingestDomain: string
   /** Settings of the receiver, as the whole numbers they are written as; undefined leaves the default of ingest/wrangler.jsonc */
   retentionDays?: string
   maxSkewSecs?: string
@@ -73,7 +76,7 @@ export function parseEnv(text: string): Record<string, string> {
 }
 
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
-/** Short enough that the longer Worker name still fits in a workers.dev hostname label (63) */
+/** Short enough that the longer Worker name stays within the 63 characters a Worker's name may have */
 const SUFFIX = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/
 
 /** NAME_SUFFIX, checked. Read on its own before the database exists (scripts/setup.ts) */
@@ -97,30 +100,43 @@ export function limiterNamespace(base: string, suffix: string): string {
 }
 const HOSTNAME = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
 
+/** Said wherever the two hostnames are missing: by `make setup` before it starts, and by every deploy */
+export const HOSTNAMES_NEEDED = `Two hostnames of your own are needed first. Put them in ${LOCAL}:
+
+  UI_DOMAIN=alerts.example.com       where you sign in
+  INGEST_DOMAIN=hook.example.com     where httpdog POSTs
+
+Each is a name under a domain that is in this Cloudflare account, and that has no DNS record yet:
+Cloudflare makes the record and the certificate. A deployment is never served from workers.dev.`
+
+/**
+ * The two hostnames of a deployment, checked. Both are required: there is no deployment without
+ * them. Read on their own by scripts/setup.ts, before there is a database to name.
+ */
+export function readDomains(env: Record<string, string>): { uiDomain: string; ingestDomain: string } {
+  const read = (name: 'UI_DOMAIN' | 'INGEST_DOMAIN') => {
+    const value = env[name] ?? ''
+    if (value && !HOSTNAME.test(value)) throw new Error(`${name} in ${LOCAL} must be a hostname alone, like alerts.example.com`)
+    return value.toLowerCase()
+  }
+  const uiDomain = read('UI_DOMAIN')
+  const ingestDomain = read('INGEST_DOMAIN')
+  if (!uiDomain || !ingestDomain) throw new Error(HOSTNAMES_NEEDED)
+  if (uiDomain === ingestDomain) throw new Error(`UI_DOMAIN and INGEST_DOMAIN in ${LOCAL} are the same. Each Worker needs a hostname of its own`)
+  return { uiDomain, ingestDomain }
+}
+
+/** Where httpdog should POST */
+export const ingestUrl = (values: { ingestDomain: string }) => `https://${values.ingestDomain}/alerts`
+
 /** The values of deploy.local.env, checked. Throws with a message meant for the terminal */
 export function readValues(env: Record<string, string>): DeployValues {
   const suffix = readSuffix(env)
+  // the hostnames first: they are what a person has to decide, the rest setup fills in
+  const { uiDomain, ingestDomain } = readDomains(env)
   const databaseId = env.DATABASE_ID ?? ''
   if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${LOCAL}. For a first deployment, run \`make setup\`: it creates the database and fills it in`)
   if (!UUID.test(databaseId)) throw new Error(`DATABASE_ID in ${LOCAL} does not look like a D1 database id`)
-
-  const domain = (name: 'UI_DOMAIN' | 'INGEST_DOMAIN') => {
-    const value = env[name]
-    if (!value) return undefined
-    if (!HOSTNAME.test(value)) throw new Error(`${name} in ${LOCAL} must be a hostname alone, like alerts.example.com`)
-    return value
-  }
-  const uiDomain = domain('UI_DOMAIN')
-  const ingestDomain = domain('INGEST_DOMAIN')
-
-  let ingestUrl = env.INGEST_URL || undefined
-  if (ingestUrl) {
-    if (!URL.canParse(ingestUrl) || !/^https?:$/.test(new URL(ingestUrl).protocol) || !new URL(ingestUrl).pathname.endsWith('/alerts')) {
-      throw new Error(`INGEST_URL in ${LOCAL} must be the receiver's address ending in /alerts`)
-    }
-  } else if (ingestDomain) {
-    ingestUrl = `https://${ingestDomain}/alerts`
-  }
 
   // The receiver falls back to its default for a setting it cannot read, which would hide a typing
   // mistake until alerts were deleted sooner or later than meant. So a mistake stops the deploy here
@@ -133,7 +149,7 @@ export function readValues(env: Record<string, string>): DeployValues {
   const retentionDays = wholeNumber('RETENTION_DAYS', 0, 'the days an alert is kept, or 0 to keep alerts forever')
   const maxSkewSecs = wholeNumber('MAX_SKEW_SECS', 1, "the seconds a request's timestamp may be from the receiver's clock")
 
-  return { databaseId, suffix, ingestUrl, uiDomain, ingestDomain, retentionDays, maxSkewSecs }
+  return { databaseId, suffix, uiDomain, ingestDomain, retentionDays, maxSkewSecs }
 }
 
 /** A copy of a Worker's config with the values in place of the examples */
@@ -151,7 +167,7 @@ export function applyValues(config: WranglerConfig, values: DeployValues, worker
   if (suffix && config.ratelimits) {
     result.ratelimits = config.ratelimits.map((limiter) => ({ ...limiter, namespace_id: limiterNamespace(limiter.namespace_id ?? '', suffix) }))
   }
-  if (worker === 'ui' && values.ingestUrl) result.vars = { ...config.vars, INGEST_URL: values.ingestUrl }
+  if (worker === 'ui') result.vars = { ...config.vars, INGEST_URL: ingestUrl(values) }
   if (worker === 'ingest' && (values.retentionDays || values.maxSkewSecs)) {
     result.vars = {
       ...config.vars,
@@ -159,12 +175,11 @@ export function applyValues(config: WranglerConfig, values: DeployValues, worker
       ...(values.maxSkewSecs ? { MAX_SKEW_SECS: values.maxSkewSecs } : {}),
     }
   }
-  const hostname = worker === 'ui' ? values.uiDomain : values.ingestDomain
-  if (hostname) {
-    result.routes = [{ pattern: hostname, custom_domain: true }]
-    result.workers_dev = false
-    result.preview_urls = false
-  }
+  // A Custom Domain: Cloudflare makes the DNS record and the certificate for the hostname. The
+  // Worker answers there and nowhere else, so its workers.dev address and preview addresses are off
+  result.routes = [{ pattern: worker === 'ui' ? values.uiDomain : values.ingestDomain, custom_domain: true }]
+  result.workers_dev = false
+  result.preview_urls = false
   return result
 }
 
@@ -194,8 +209,13 @@ function check(): DeployValues {
     const found = leak(readTemplate(path))
     if (found) throw new Error(`${path} has ${found}. That file is committed: move the value to ${LOCAL} and put the example back`)
   }
-  if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing. For a first deployment, run \`make setup\`: it writes the file and fills it in`)
+  if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing. For a first deployment, run \`make setup\`: it writes the file and says what to put in it`)
   return readValues(readLocal())
+}
+
+/** A line of an older file that is no longer read, said once so that it does not sit there misleading */
+function noteOldLines() {
+  if (readLocal().INGEST_URL) console.log(`note: INGEST_URL in ${LOCAL} is no longer read. The receiver's address is https://<INGEST_DOMAIN>/alerts; the line can go`)
 }
 
 function write(path: string, config: WranglerConfig) {
@@ -206,14 +226,15 @@ if (import.meta.main) {
   const command = process.argv[2]
   try {
     if (command === 'check') {
-      const values = check()
-      if (!values.ingestUrl) console.log(`note: neither INGEST_URL nor INGEST_DOMAIN is set in ${LOCAL}; the keys page will show the example address until one is`)
+      check()
+      noteOldLines()
     } else if (command === 'configs') {
       const values = check()
+      noteOldLines()
       const ui = applyValues(readTemplate(UI_TEMPLATE), values, 'ui')
       const ingest = applyValues(readTemplate(INGEST_TEMPLATE), values, 'ingest')
       // Said every time: with more than one deployment, this is how to see which one is about to change
-      console.log(`${LOCAL}: Workers ${ui.name} and ${ingest.name}, database ${ingest.d1_databases?.[0]?.database_name}`)
+      console.log(`${LOCAL}: ${ui.name} at ${values.uiDomain}, ${ingest.name} at ${values.ingestDomain}, database ${ingest.d1_databases?.[0]?.database_name}`)
       write(UI_DEPLOY, ui)
       write(INGEST_DEPLOY, ingest)
     } else if (command === 'database-name') {

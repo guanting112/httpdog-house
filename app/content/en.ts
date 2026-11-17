@@ -154,7 +154,7 @@ export const en = {
     lead: 'A key is one HMAC secret and the instances allowed to use it. The receiver reads the instance name from an alert, then checks the signature against every enabled key that lists that name.',
     add: 'new key',
     ingest: 'where httpdog sends',
-    ingestUnset: 'INGEST_URL is still the example value. Set it in wrangler.jsonc to the address of the ingest Worker and deploy the UI again.',
+    ingestUnset: 'This is the example address, not yours. Deploy the UI with `make deploy-ui`: it takes the address from INGEST_DOMAIN in deploy.local.env.',
     none: 'No keys yet. Until there is one, every alert is refused.',
     enabled: 'enabled',
     disabled: 'disabled',

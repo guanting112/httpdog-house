@@ -4,15 +4,36 @@
 
 它從一開始就是為 Cloudflare 設計的:兩個 Worker 加一個 D1 資料庫,都在你的帳號裡。所有東西都在你的機器上 build,再用 wrangler 上傳;Cloudflare 不負責 build,也不會讀取 Git repository。
 
+## 第一次之前:兩個主機名稱
+
+一套部署只會掛在你自己的兩個主機名稱上,不會出現在別的地方。沒有它們就什麼都不會建立:缺少時 `make setup` 和每一次部署都會停下來,而兩個 Worker 的 `workers.dev` 網址一律關閉。
+
+```bash
+cp deploy.local.env.example deploy.local.env
+```
+
+```
+UI_DOMAIN=alerts.example.com       # 登入用
+INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example.com/alerts
+```
+
+- **兩個都要是同一個 Cloudflare 帳號裡某個網域底下的名稱**,而且不能相同。
+- **兩個都還沒有 DNS 紀錄。** 它們會各自成為所屬 Worker 的 Custom Domain:上傳 Worker 時 Cloudflare 會建立 DNS 紀錄與憑證,不需要手動加任何東西。新的主機名稱可能要一兩分鐘才會有回應。
+- **主機名稱不是祕密。** 為它簽發的憑證會像所有憑證一樣登錄在公開的紀錄裡,所以任何人都可能看到這個名稱。取一個看不出用途的名稱,透露的就比較少。真正保護介面的是登入;如果連登入頁都不想讓陌生人看到,可以在 `UI_DOMAIN` 前面加上 Cloudflare Access。接收端則必須對你的主機開放。
+- **之後要換主機名稱**,改這兩行再執行 `make deploy` 就可以。主機上的 `HTTPDOG_WEBHOOK_URL` 要跟著換成新的網址,送到舊網址的告警會遺失。
+
+在沒有 `deploy.local.env` 的 checkout 裡執行 `make setup`,它會替你建立這個檔案,說明上面這些事,然後停下來。
+
 ## 第一次:`make setup`
 
 | 步驟 | 做了什麼 |
 |---|---|
-| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
+| 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西 |
+| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號、要用哪兩個主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
 | 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它 |
 | 3. 資料表 | 套用 `migrations/`。wrangler 會先問你要不要繼續 |
-| 4. 接收端 | 上傳 ingest Worker,並把它的網址記在 `deploy.local.env` |
-| 5. 介面 | build 並上傳 UI Worker |
+| 4. 接收端 | 把 ingest Worker 上傳到 `INGEST_DOMAIN`。Cloudflare 會建立這個主機名稱的 DNS 紀錄與憑證 |
+| 5. 介面 | build 並把 UI Worker 上傳到 `UI_DOMAIN`,做法相同 |
 | 6. 金鑰 | 產生 `SECRETS_KEY` 並設定到兩個 Worker。它用來加密資料庫裡的簽章 secret,不會存在其他地方,也沒有人需要知道它的內容 |
 | 7. 第一個管理員 | 問使用者名稱,再問兩次密碼。已經有管理員時會略過 |
 
@@ -24,46 +45,30 @@
 
 ## 你自己的設定:`deploy.local.env`
 
-`make setup` 會建立這個檔案並填好內容。每一套部署不一樣的東西,都只放在這裡:
+每一套部署不一樣的東西,都只放在這裡:
 
 | 值 | 意義 |
 |---|---|
+| `UI_DOMAIN`、`INGEST_DOMAIN` | **必填,由你自己填。** 兩個主機名稱,見上方。給 httpdog 的網址由第二個決定:`https://<INGEST_DOMAIN>/alerts` |
 | `DATABASE_ID` | D1 資料庫的 id。由 `make setup` 填入 |
-| `INGEST_URL` | httpdog 要 POST 的網址,結尾是 `/alerts`。keys 頁面會顯示它。由 `make setup` 填入;設定了 `INGEST_DOMAIN` 時會跟著它 |
-| `UI_DOMAIN`、`INGEST_DOMAIN` | 你自己的網域,見下方 |
 | `NAME_SUFFIX` | 只有在同一個帳號放另一套部署時才需要,見下方 |
 | `RETENTION_DAYS`、`MAX_SKEW_SECS` | 接收端的設定,見下方 |
 
 Git 會忽略這個檔案。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`wrangler.deploy.json`、`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這些檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 fork 不帶任何人的部署資料,你也可以從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
 
-## 自訂網域
-
-沒有設定時,每個 Worker 的網址是 `<Worker 名稱>.<你的帳號>.workers.dev`。要用自己的網域,就寫進 `deploy.local.env` 再部署:
-
-```
-UI_DOMAIN=alerts.example.com
-INGEST_DOMAIN=hook.example.com
-```
-
-```bash
-make deploy
-```
-
-每個 zone 都必須在同一個 Cloudflare 帳號裡。接收端的網址會跟著 `INGEST_DOMAIN`,所以 `INGEST_URL` 留空就好;已經在送告警的主機,要把 `HTTPDOG_WEBHOOK_URL` 改成新的網址。想從第一次部署就使用自訂網域,請先把 `deploy.local.env.example` 複製成 `deploy.local.env`,填好網域之後再執行 `make setup`。
-
-介面有自己的網域之後,就可以放在 Cloudflare Access 或 IP 規則後面,不影響主機送告警的網址。
+在主機名稱變成必填之前建立的檔案,裡面可能還有一行 `INGEST_URL`。它已經不會被讀取,部署時會提醒你;這一行可以刪掉。
 
 ## 同一個帳號放多套部署
 
 每一套部署有自己的檔案與自己的名稱:
 
 ```bash
-cp deploy.local.env.example deploy.team-a.env    # 然後在裡面設定 NAME_SUFFIX=team-a
+cp deploy.local.env.example deploy.team-a.env    # 然後在裡面設定 NAME_SUFFIX=team-a 和它自己的兩個主機名稱
 make setup  DEPLOY_ENV=deploy.team-a.env
 make deploy DEPLOY_ENV=deploy.team-a.env         # 之後更新時使用
 ```
 
-這樣兩個 Worker 會叫 `httpdog-house-ui-team-a` 與 `httpdog-house-ingest-team-a`,資料庫叫 `httpdog-house-team-a`,登入的 rate limiter 也會有自己的編號。各套部署之間不共用任何東西:`SECRETS_KEY`、帳號、金鑰與告警都是各自一份。每個會連到 Cloudflare 的指令都會先印出它讀的是哪個檔案、要動的是哪兩個 Worker。不指定 `DEPLOY_ENV` 時讀的是 `deploy.local.env`;沒有設定 `NAME_SUFFIX` 時用的是不帶後綴的名稱。後綴要在第一次 `make setup` 之前設好,之後不要改:換後綴等於另一套新的部署。Git 會忽略所有 `deploy.*.env`。
+這樣兩個 Worker 會叫 `httpdog-house-ui-team-a` 與 `httpdog-house-ingest-team-a`,資料庫叫 `httpdog-house-team-a`,登入的 rate limiter 也會有自己的編號。各套部署之間不共用任何東西:主機名稱、`SECRETS_KEY`、帳號、金鑰與告警都是各自一份。每個會連到 Cloudflare 的指令都會先印出它讀的是哪個檔案、要動的是哪兩個 Worker。不指定 `DEPLOY_ENV` 時讀的是 `deploy.local.env`;沒有設定 `NAME_SUFFIX` 時用的是不帶後綴的名稱。後綴要在第一次 `make setup` 之前設好,之後不要改:換後綴等於另一套新的部署。Git 會忽略所有 `deploy.*.env`。
 
 ## 接收端的設定
 

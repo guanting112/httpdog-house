@@ -1,31 +1,32 @@
 // A whole first deployment in one command (`make setup`), and safe to run again: every step looks
 // at what is already there and does only what is missing.
 //
+//   before anything: the two hostnames of the deployment must be in deploy.local.env. Without them
+//      it stops, having written the file if it was not there, and says what to put in it
 //   1. log in to Cloudflare if this machine is not logged in, then say which account that is and
 //      go on only after a yes
 //   2. create the D1 database and note its id in deploy.local.env
 //   3. create the tables
-//   4. upload the receiver, and note its address in deploy.local.env
-//   5. build and upload the UI
+//   4. upload the receiver, at its hostname
+//   5. build and upload the UI, at its hostname
 //   6. give both Workers the same new SECRETS_KEY
 //   7. make the first admin
 //
-// The file it fills in is the one scripts/deploy-config.ts reads; with DEPLOY_ENV=deploy.<suffix>.env
-// it sets up another deployment in the same account. After this, `make deploy` is all an update needs.
+// The file is the one scripts/deploy-config.ts reads; with DEPLOY_ENV=deploy.<suffix>.env it sets
+// up another deployment in the same account. After this, `make deploy` is all an update needs.
 
-import { closeSync, constants, existsSync, mkdtempSync, openSync, readFileSync, readSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { closeSync, constants, existsSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { USERNAME } from '../server/utils/password'
-import { databaseName, INGEST_DEPLOY, LOCAL, LOCAL_EXAMPLE, parseEnv, readSuffix, ROOT, UI_DEPLOY } from './deploy-config'
+import { databaseName, HOSTNAMES_NEEDED, INGEST_DEPLOY, ingestUrl, LOCAL, LOCAL_EXAMPLE, parseEnv, readDomains, readSuffix, ROOT, UI_DEPLOY } from './deploy-config'
 
 const WRANGLER = ['bunx', 'wrangler']
 const MAKE = ['make', '--no-print-directory']
 
 /** Everything setup does to the outside: the terminal, the commands it runs and the two files it touches */
 export interface Shell {
-  /** Runs a command on the terminal, so it can ask its own questions. `output` is what wrangler reported about a deploy */
-  run(command: string[]): Promise<{ code: number; output: string }>
+  /** Runs a command on the terminal, so it can ask its own questions */
+  run(command: string[]): Promise<{ code: number }>
   /** Runs a command without showing it and returns what it printed */
   capture(command: string[]): Promise<{ code: number; stdout: string; stderr: string }>
   /** CLOUDFLARE_ACCOUNT_ID of the environment: the account wrangler uses when the login reaches several */
@@ -59,24 +60,6 @@ export function findDatabase(listJson: string, name: string): string | undefined
   }
 }
 
-/**
- * The workers.dev address of a deploy. wrangler writes one JSON object per line to the file named
- * by WRANGLER_OUTPUT_FILE_PATH; the one of type "deploy" lists where the Worker can be reached.
- */
-export function workersDevUrl(output: string): string | undefined {
-  for (const line of output.split('\n')) {
-    try {
-      const entry = JSON.parse(line) as { type?: string; targets?: unknown }
-      if (entry.type !== 'deploy' || !Array.isArray(entry.targets)) continue
-      const url = entry.targets.find((target) => typeof target === 'string' && /^https:\/\/[a-z0-9.-]+\.workers\.dev$/.test(target))
-      if (url) return url as string
-    } catch {
-      // not a line of JSON: nothing to read from it
-    }
-  }
-  return undefined
-}
-
 /** The number in the one row a `SELECT count(*) AS n` printed through `wrangler d1 execute --json` */
 export function readCount(executeJson: string): number | undefined {
   try {
@@ -104,7 +87,24 @@ export function readLogin(whoamiJson: string): Login | undefined {
   }
 }
 
-export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: string }> {
+export async function setup(shell: Shell): Promise<{ ui: string; receiver: string }> {
+  // Before anything, and before anyone is asked anything: the two hostnames. They are the one thing
+  // a person has to decide, and a deployment without them is not made
+  if (shell.read(LOCAL) === null) {
+    const example = shell.read(LOCAL_EXAMPLE)
+    if (example === null) throw new SetupError(`${LOCAL_EXAMPLE} is missing; is this a complete checkout?`)
+    shell.write(LOCAL, example)
+    throw new SetupError(`Nothing was set up yet. ${LOCAL} was written: what is yours about this deployment is kept there, and Git ignores it.\n\n${HOSTNAMES_NEEDED}\n\nThen run \`make setup\` again.`)
+  }
+  const values = () => parseEnv(shell.read(LOCAL) ?? '')
+  const set = (key: string, value: string) => shell.write(LOCAL, setEnvValue(shell.read(LOCAL) ?? '', key, value))
+  let domains: { uiDomain: string; ingestDomain: string }
+  try {
+    domains = readDomains(values())
+  } catch (error) {
+    throw new SetupError(`Nothing was set up yet.\n\n${error instanceof Error ? error.message : error}\n\nThen run \`make setup\` again.`)
+  }
+
   let step = 0
   const say = (title: string) => shell.log(`\n[${++step}/7] ${title}`)
   const must = async (command: string[], failure: string) => {
@@ -144,22 +144,12 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
     }
   }
   if (!target) throw new SetupError(`${login.email} has no Cloudflare account to deploy to.`)
+  shell.log(`${domains.uiDomain} to sign in at, ${domains.ingestDomain} for httpdog to send to`)
   const answer = shell.ask(`Logged in as ${login.email}. Set up httpdog-house in "${target.name}"? (y/n): `)
   if (answer === null) throw new SetupError('There is no terminal to confirm the account on, so nothing was done. Run `make setup` in a terminal.')
   if (!/^y(es)?$/i.test(answer.trim())) {
     throw new SetupError('Stopped before changing anything. To use another login: `bunx wrangler logout`, then `make setup` again.')
   }
-
-  // The file of this deployment, written only once the account is agreed to. Everything below
-  // reads it again after writing to it
-  if (shell.read(LOCAL) === null) {
-    const example = shell.read(LOCAL_EXAMPLE)
-    if (example === null) throw new SetupError(`${LOCAL_EXAMPLE} is missing; is this a complete checkout?`)
-    shell.write(LOCAL, example)
-    shell.log(`wrote ${LOCAL}: what is yours about this deployment is kept there, and Git ignores it`)
-  }
-  const values = () => parseEnv(shell.read(LOCAL) ?? '')
-  const set = (key: string, value: string) => shell.write(LOCAL, setEnvValue(shell.read(LOCAL) ?? '', key, value))
 
   say('Database')
   if (values().DATABASE_ID) {
@@ -187,20 +177,12 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
   say('Tables')
   await must([...MAKE, 'db-migrate'], `Could not create the tables. ${again}`)
 
+  // Cloudflare makes the DNS record and the certificate of each hostname as its Worker is uploaded
   say('Receiver')
-  const ingest = await must([...MAKE, 'deploy-ingest'], `Could not upload the receiver. ${again}`)
-  if (!values().INGEST_URL && !values().INGEST_DOMAIN) {
-    const url = workersDevUrl(ingest.output)
-    if (url) {
-      set('INGEST_URL', `${url}/alerts`)
-      shell.log(`noted its address in ${LOCAL}`)
-    } else {
-      shell.log(`note: could not read the receiver's address. Set INGEST_URL in ${LOCAL} and run \`make deploy-ui\`, or the keys page shows an example address`)
-    }
-  }
+  await must([...MAKE, 'deploy-ingest'], `Could not upload the receiver. ${again}`)
 
   say('UI')
-  const ui = await must([...MAKE, 'deploy-ui'], `Could not build and upload the UI. ${again}`)
+  await must([...MAKE, 'deploy-ui'], `Could not build and upload the UI. ${again}`)
 
   say('The key that encrypts stored secrets')
   const hasKey = async (config: string) => {
@@ -242,11 +224,7 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
     await must(['bun', 'scripts/create-admin.ts', name, '--remote'], `The admin was not created. ${later}`)
   }
 
-  const env = values()
-  return {
-    ui: env.UI_DOMAIN ? `https://${env.UI_DOMAIN}` : workersDevUrl(ui.output),
-    receiver: env.INGEST_URL || (env.INGEST_DOMAIN ? `https://${env.INGEST_DOMAIN}/alerts` : undefined),
-  }
+  return { ui: `https://${domains.uiDomain}`, receiver: ingestUrl(domains) }
 }
 
 /**
@@ -272,17 +250,10 @@ function discardTypedAhead() {
 
 /** The real thing: commands run in the repository, on this terminal */
 export function terminal(): Shell {
-  const outputFile = join(mkdtempSync(join(tmpdir(), 'httpdog-house-')), 'wrangler-output.ndjson')
   return {
     async run(command) {
-      rmSync(outputFile, { force: true })
-      const child = Bun.spawn(command, {
-        cwd: ROOT,
-        stdio: ['inherit', 'inherit', 'inherit'],
-        env: { ...process.env, WRANGLER_OUTPUT_FILE_PATH: outputFile },
-      })
-      const code = await child.exited
-      return { code, output: existsSync(outputFile) ? readFileSync(outputFile, 'utf8') : '' }
+      const child = Bun.spawn(command, { cwd: ROOT, stdio: ['inherit', 'inherit', 'inherit'] })
+      return { code: await child.exited }
     },
     async capture(command) {
       const child = Bun.spawn(command, { cwd: ROOT, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
@@ -306,8 +277,9 @@ if (import.meta.main) {
   try {
     const { ui, receiver } = await setup(terminal())
     console.log('\nDone.')
-    console.log(`  Sign in:         ${ui ?? 'the address of the UI Worker, in the output above'}`)
-    console.log(`  httpdog POSTs:   ${receiver ?? `set INGEST_URL in ${LOCAL}`}`)
+    console.log(`  Sign in:         ${ui}`)
+    console.log(`  httpdog POSTs:   ${receiver}`)
+    console.log('  A new hostname can take a minute or two to answer, while its certificate is made.')
     console.log('  Next: on the keys page, make a key and follow "set up a host".')
     console.log('  Later: `git pull && make deploy` brings a deployment up to date.')
   } catch (error) {

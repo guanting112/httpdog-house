@@ -2,15 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { INGEST_DEPLOY, LOCAL, LOCAL_EXAMPLE, parseEnv, UI_DEPLOY } from '../scripts/deploy-config'
-import { findDatabase, readCount, setEnvValue, setup, SetupError, type Shell, workersDevUrl } from '../scripts/setup'
+import { findDatabase, readCount, setEnvValue, setup, SetupError, type Shell } from '../scripts/setup'
 
 const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
 const EXAMPLE = readFileSync(resolve(import.meta.dir, '..', LOCAL_EXAMPLE), 'utf8')
-const deployed = (...targets: string[]) => JSON.stringify({ type: 'deploy', version: 1, targets }) + '\n'
+/** The file as a person leaves it before the first `make setup`: the example, with the two hostnames filled in */
+const READY = setEnvValue(setEnvValue(EXAMPLE, 'UI_DOMAIN', 'alerts.example.com'), 'INGEST_DOMAIN', 'hook.example.com')
 
 /** A Cloudflare account and a terminal that exist only here. `ran` is every command that was shown on the terminal */
 function account(start: {
-  file?: string
+  /** deploy.local.env. READY unless a test says otherwise; null for a checkout that has none yet */
+  file?: string | null
   loggedIn?: boolean
   databases?: { name: string; uuid: string }[]
   keyOn?: string[]
@@ -27,13 +29,16 @@ function account(start: {
   /** What is typed, in turn, when asked for the admin's name */
   names?: string[]
 }) {
+  const file = start.file === undefined ? READY : start.file
   const state = {
-    files: { [LOCAL_EXAMPLE]: EXAMPLE, ...(start.file === undefined ? {} : { [LOCAL]: start.file }) } as Record<string, string>,
+    files: { [LOCAL_EXAMPLE]: EXAMPLE, ...(file === null ? {} : { [LOCAL]: file }) } as Record<string, string>,
     loggedIn: start.loggedIn ?? true,
     databases: start.databases ?? [],
     keyOn: start.keyOn ?? [],
     admins: start.admins ?? 0,
     ran: [] as string[],
+    /** Commands run without being shown: the looking, as against the doing */
+    looked: [] as string[],
     said: [] as string[],
     /** How many times a username was asked for */
     asked: 0,
@@ -45,17 +50,16 @@ function account(start: {
     async run(command) {
       const line = command.join(' ')
       state.ran.push(line)
-      if (start.failing && line.includes(start.failing)) return { code: 1, output: '' }
+      if (start.failing && line.includes(start.failing)) return { code: 1 }
       if (line === 'bunx wrangler login') state.loggedIn = true
       if (line.startsWith('bunx wrangler d1 create ')) state.databases.push({ name: command[4]!, uuid: ID })
       if (line.startsWith('make --no-print-directory secrets')) state.keyOn = [INGEST_DEPLOY, UI_DEPLOY]
       if (line.startsWith('bun scripts/create-admin.ts ')) state.admins++
-      if (line.endsWith(' deploy-ingest')) return { code: 0, output: deployed('https://httpdog-house-ingest.someone.workers.dev', 'schedule: 17 3 * * *') }
-      if (line.endsWith(' deploy-ui')) return { code: 0, output: deployed('https://httpdog-house-ui.someone.workers.dev') }
-      return { code: 0, output: '' }
+      return { code: 0 }
     },
     async capture(command) {
       const line = command.join(' ')
+      state.looked.push(line)
       const ok = (stdout: string) => ({ code: 0, stdout, stderr: '' })
       if (line === 'bunx wrangler whoami --json') return state.loggedIn ? ok(JSON.stringify(login)) : { code: 1, stdout: '{"loggedIn":false}', stderr: '' }
       if (line === 'bunx wrangler d1 list --json') return ok(JSON.stringify(state.databases))
@@ -83,14 +87,14 @@ function account(start: {
 describe('what setup reads', () => {
   test('a value is set in place, or added when the file has no line for it', () => {
     expect(setEnvValue('# a comment\nDATABASE_ID=\nUI_DOMAIN=\n', 'DATABASE_ID', ID)).toBe(`# a comment\nDATABASE_ID=${ID}\nUI_DOMAIN=\n`)
-    expect(setEnvValue('UI_DOMAIN=a.example.com', 'INGEST_URL', 'https://h.example.com/alerts')).toBe('UI_DOMAIN=a.example.com\nINGEST_URL=https://h.example.com/alerts\n')
+    expect(setEnvValue('UI_DOMAIN=a.example.com', 'DATABASE_ID', ID)).toBe(`UI_DOMAIN=a.example.com\nDATABASE_ID=${ID}\n`)
     expect(parseEnv(setEnvValue(EXAMPLE, 'DATABASE_ID', ID)).DATABASE_ID).toBe(ID)
   })
 
   // Found by test/fuzz.test.ts
   test('a value is written as it is, over the whole line, on every line for the key', () => {
-    expect(setEnvValue('INGEST_URL=old\n', 'INGEST_URL', "https://h.example.com/alerts?a=$&b=$'")).toBe("INGEST_URL=https://h.example.com/alerts?a=$&b=$'\n")
-    expect(setEnvValue('INGEST_URL=old\rstill the same line\nUI_DOMAIN=\n', 'INGEST_URL', 'new')).toBe('INGEST_URL=new\nUI_DOMAIN=\n')
+    expect(setEnvValue('UI_DOMAIN=old\n', 'UI_DOMAIN', "a$&b$'")).toBe("UI_DOMAIN=a$&b$'\n")
+    expect(setEnvValue('UI_DOMAIN=old\rstill the same line\nINGEST_DOMAIN=\n', 'UI_DOMAIN', 'new')).toBe('UI_DOMAIN=new\nINGEST_DOMAIN=\n')
     expect(parseEnv(setEnvValue('DATABASE_ID=\n# again, by hand\nDATABASE_ID=\n', 'DATABASE_ID', ID)).DATABASE_ID).toBe(ID)
   })
 
@@ -104,13 +108,6 @@ describe('what setup reads', () => {
     expect(findDatabase('not json', 'httpdog-house')).toBeUndefined()
   })
 
-  test('the workers.dev address is taken from the deploy wrangler reported', () => {
-    const output = '{"type":"wrangler-session","version":1}\n' + deployed('schedule: 17 3 * * *', 'https://httpdog-house-ingest.someone.workers.dev')
-    expect(workersDevUrl(output)).toBe('https://httpdog-house-ingest.someone.workers.dev')
-    expect(workersDevUrl(deployed('hook.example.com (custom domain)'))).toBeUndefined()
-    expect(workersDevUrl('')).toBeUndefined()
-  })
-
   test('a count is read from the one row', () => {
     expect(readCount('[{"results":[{"n":3}],"success":true}]')).toBe(3)
     expect(readCount('[{"results":[],"success":true}]')).toBeUndefined()
@@ -118,8 +115,38 @@ describe('what setup reads', () => {
   })
 })
 
+describe('make setup, before it starts', () => {
+  test('with no file yet, it writes the file, says what to put in it, and does nothing else', async () => {
+    const { state, shell } = account({ file: null })
+    const stopped = await setup(shell).catch((error: Error) => error)
+    expect(stopped).toBeInstanceOf(SetupError)
+    expect((stopped as Error).message).toContain('UI_DOMAIN=')
+    expect((stopped as Error).message).toContain('INGEST_DOMAIN=')
+    expect((stopped as Error).message).toContain('`make setup` again')
+    // the file is the example, ready to be filled in
+    expect(state.files[LOCAL]).toBe(EXAMPLE)
+    // nobody was asked anything, and Cloudflare was not even looked at
+    expect([state.ran, state.looked, state.confirmations]).toEqual([[], [], []])
+  })
+
+  test('without both hostnames in the file, nothing is set up: not on workers.dev, not at all', async () => {
+    for (const file of [EXAMPLE, setEnvValue(EXAMPLE, 'UI_DOMAIN', 'alerts.example.com'), setEnvValue(EXAMPLE, 'INGEST_DOMAIN', 'hook.example.com')]) {
+      const { state, shell } = account({ file })
+      await expect(setup(shell)).rejects.toThrow('Two hostnames of your own are needed first')
+      expect([state.ran, state.looked, state.confirmations]).toEqual([[], [], []])
+      expect(state.files[LOCAL]).toBe(file)
+    }
+  })
+
+  test('a hostname that is not one stops it the same way, and says which', async () => {
+    const { state, shell } = account({ file: setEnvValue(READY, 'UI_DOMAIN', 'https://alerts.example.com') })
+    await expect(setup(shell)).rejects.toThrow('UI_DOMAIN')
+    expect([state.ran, state.looked]).toEqual([[], []])
+  })
+})
+
 describe('make setup', () => {
-  test('on a new account it does everything, in order, and fills in the file', async () => {
+  test('on a new account it does everything, in order, and notes the database in the file', async () => {
     const { state, shell } = account({ loggedIn: false })
     const result = await setup(shell)
 
@@ -132,16 +159,15 @@ describe('make setup', () => {
       'make --no-print-directory secrets',
       'bun scripts/create-admin.ts guanting --remote',
     ])
-    const file = parseEnv(state.files[LOCAL]!)
-    expect(file.DATABASE_ID).toBe(ID)
-    expect(file.INGEST_URL).toBe('https://httpdog-house-ingest.someone.workers.dev/alerts')
-    expect(result).toEqual({ ui: 'https://httpdog-house-ui.someone.workers.dev', receiver: 'https://httpdog-house-ingest.someone.workers.dev/alerts' })
+    expect(parseEnv(state.files[LOCAL]!)).toMatchObject({ DATABASE_ID: ID, UI_DOMAIN: 'alerts.example.com', INGEST_DOMAIN: 'hook.example.com' })
+    // the two addresses it ends with are the two hostnames, whatever wrangler printed
+    expect(result).toEqual({ ui: 'https://alerts.example.com', receiver: 'https://hook.example.com/alerts' })
     // a name the UI would refuse is asked for again
     expect(state.asked).toBe(2)
   })
 
   test('run again, it only brings the deployment up to date', async () => {
-    const file = setEnvValue(setEnvValue(EXAMPLE, 'DATABASE_ID', ID), 'INGEST_URL', 'https://httpdog-house-ingest.someone.workers.dev/alerts')
+    const file = setEnvValue(READY, 'DATABASE_ID', ID)
     const { state, shell } = account({ file, databases: [{ name: 'httpdog-house', uuid: ID }], keyOn: [INGEST_DEPLOY, UI_DEPLOY], admins: 1 })
     await setup(shell)
 
@@ -158,17 +184,9 @@ describe('make setup', () => {
   })
 
   test('a second deployment gets its own database name', async () => {
-    const { state, shell } = account({ file: setEnvValue(EXAMPLE, 'NAME_SUFFIX', 'team-a') })
+    const { state, shell } = account({ file: setEnvValue(READY, 'NAME_SUFFIX', 'team-a') })
     await setup(shell)
     expect(state.ran).toContain('bunx wrangler d1 create httpdog-house-team-a --update-config=false')
-  })
-
-  test('with a hostname of your own, the addresses come from the file', async () => {
-    const file = setEnvValue(setEnvValue(EXAMPLE, 'INGEST_DOMAIN', 'hook.example.com'), 'UI_DOMAIN', 'alerts.example.com')
-    const { state, shell } = account({ file })
-    const result = await setup(shell)
-    expect(parseEnv(state.files[LOCAL]!).INGEST_URL).toBe('')
-    expect(result).toEqual({ ui: 'https://alerts.example.com', receiver: 'https://hook.example.com/alerts' })
   })
 
   test('a step that fails stops there, and what was done is kept for the next run', async () => {
@@ -178,18 +196,19 @@ describe('make setup', () => {
     expect(parseEnv(state.files[LOCAL]!).DATABASE_ID).toBe(ID)
   })
 
-  test('it says who is logged in and which account, and waits for a yes', async () => {
+  test('it says who is logged in, which account and which hostnames, and waits for a yes', async () => {
     const { state, shell } = account({})
     await setup(shell)
     expect(state.confirmations).toEqual([`Logged in as someone@example.com. Set up httpdog-house in "Someone's Account"? (y/n): `])
+    expect(state.said).toContain('alerts.example.com to sign in at, hook.example.com for httpdog to send to')
   })
 
-  test('anything but a yes stops it before a command is run or a file is written', async () => {
+  test('anything but a yes stops it before a command is run or the file is changed', async () => {
     for (const confirm of ['n', '', 'no', 'maybe']) {
       const { state, shell } = account({ confirm })
       await expect(setup(shell)).rejects.toThrow('Stopped before changing anything')
       expect(state.ran).toEqual([])
-      expect(state.files[LOCAL]).toBeUndefined()
+      expect(state.files[LOCAL]).toBe(READY)
     }
   })
 
@@ -213,7 +232,7 @@ describe('make setup', () => {
     const { state, shell } = account({ noTerminal: true })
     await expect(setup(shell)).rejects.toThrow('no terminal to confirm the account on')
     expect(state.ran).toEqual([])
-    expect(state.files[LOCAL]).toBeUndefined()
+    expect(state.files[LOCAL]).toBe(READY)
   })
 
   test('a login that reaches several accounts has to say which one', async () => {
