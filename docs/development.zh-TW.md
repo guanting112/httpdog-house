@@ -75,5 +75,6 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 - Fuzzing:另外 17 個測試是 `test/fuzz.test.ts` 裡的性質,在 `make check` 中每個用 200 組產生出來的輸入去試,在 `make fuzz` 中則是 20,000 組。涵蓋接收端(沒有簽章的請求不會被存下來,也不會得到錯誤回應;已簽章的告警不論欄位裡放什麼都只存一次;簽章後被改過的內容、沒有金鑰登記的 instance 都會被拒絕)、簽章、secret 的加密、instance 樣式、頁面上顯示的文字與語法上色,以及 `deploy.local.env`。最初幾次執行找到三個問題,都已修正:會反轉文字方向的 U+061C 原本會照原樣顯示;已簽章的告警裡像 `1e300` 這樣的數字原本會被當成時間存下來;寫進 `deploy.local.env` 的值,原本可能因為值裡的 `$` 或被取代那一行裡的 `\r` 而走樣。
 - 在一台機器上(macOS、wrangler 4.163.0),兩個 Worker 都跑在 wrangler 的本機執行環境裡:真的 `httpdog` 執行檔重播 `sample.log`,3 則已簽章的告警都送達;改用錯的 secret 時,9 次嘗試全部被拒絕並留下紀錄。
 - 用 headless Chrome 對 build 後的介面測試,HTTP 與 HTTPS 都跑過:登入、新告警即時出現、篩選、金鑰的建立、編輯、停用與刪除(每一步之後都檢查接收端的回應)、viewer 被擋在管理頁面與管理 API 之外、變更密碼,以及兩種語言、兩種主題在桌機與手機寬度下的頁面。
-- **沒有驗證:workflow。** 它們還沒有執行過。`check.yml` 跑的指令和在本機上一樣,但環境是 Linux,還沒有在那裡試過;`codeql.yml` 與 `scorecard.yml` 在 repository 還是 private 時會被略過。
+- 在 GitHub 的 Linux runner 上:`check.yml`(`make check` 與 `make dry-run`)與 `fuzz.yml`(每個性質 5,000 組輸入)第一次執行就通過。
+- **沒有驗證:`codeql.yml` 與 `scorecard.yml`。** repository 還是 private 時它們會被略過,所以還沒有執行過。
 - **沒有驗證:Cloudflare 上的任何東西。** 還沒有部署過,所以對真實帳號執行 `make setup`、真正的 D1、速率限制、每日排程,以及免費方案的 CPU 上限都沒有測過。
