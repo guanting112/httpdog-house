@@ -6,6 +6,10 @@
 #   UI Worker       the pages and their API, built by Nuxt         wrangler.jsonc
 #   ingest Worker   receives httpdog's alerts and verifies them    ingest/wrangler.jsonc
 #
+# Those two files are committed and hold example values. What is yours (the database id, the
+# receiver's address, your hostnames) is in deploy.local.env, which is not committed; the targets
+# that reach Cloudflare put it into generated configs (scripts/deploy-config.ts).
+#
 # These are shortcuts for bun and wrangler commands. Everything is built on this machine and
 # uploaded with wrangler; Cloudflare builds nothing and does not read the Git repository.
 #
@@ -22,8 +26,11 @@ WRANGLER := bunx wrangler
 DB            := httpdog-house
 UI_CONFIG     := wrangler.jsonc
 INGEST_CONFIG := ingest/wrangler.jsonc
-# The database_id both files ship with; deploying refuses to go on while it is still there
-PLACEHOLDER   := 00000000-0000-0000-0000-000000000000
+# Your values, and the ingest config generated from them. It names the real database, so the
+# database commands (db-migrate, admin) use it too
+DEPLOY_ENV    := deploy.local.env
+INGEST_DEPLOY := ingest/wrangler.deploy.json
+DEPLOY_CONFIG := $(BUN) scripts/deploy-config.ts
 
 # Ports: nuxt dev, the ingest Worker, and the built UI under wrangler (make preview)
 PORT         ?= 3000
@@ -101,27 +108,28 @@ dry-run: build ## Bundle both Workers and check both configs without uploading a
 
 ##@ Cloudflare, the first time (in this order)
 
-.PHONY: login whoami db-create check-config db-migrate secrets admin
+.PHONY: login whoami db-create check-config ingest-config db-migrate secrets admin
 login: ## Log in to Cloudflare (opens the browser)
 	$(WRANGLER) login
 
 whoami: ## Show which Cloudflare account is logged in
 	$(WRANGLER) whoami
 
-db-create: ## 1. Create the D1 database; put the id it prints in both wrangler.jsonc files
+db-create: ## 1. Create the D1 database; put the id it prints in deploy.local.env
 	$(WRANGLER) d1 create $(DB)
+	@[ -f $(DEPLOY_ENV) ] || { cp $(DEPLOY_ENV).example $(DEPLOY_ENV); echo; echo "  wrote $(DEPLOY_ENV)"; }
 	@echo
-	@echo "  Put that database_id in $(UI_CONFIG) and in $(INGEST_CONFIG), replacing $(PLACEHOLDER)."
+	@echo "  Put that database_id in $(DEPLOY_ENV) as DATABASE_ID. That file is not committed;"
+	@echo "  leave the example id in $(UI_CONFIG) and $(INGEST_CONFIG) as it is."
 
-check-config: ## Stop if the two Workers do not name the same, real database
-	@ui=$$(grep -o '"database_id": *"[^"]*"' $(UI_CONFIG) | cut -d'"' -f4); \
-	ingest=$$(grep -o '"database_id": *"[^"]*"' $(INGEST_CONFIG) | cut -d'"' -f4); \
-	if [ -z "$$ui" ] || [ "$$ui" = "$(PLACEHOLDER)" ]; then echo "error: $(UI_CONFIG) still has the example database_id; run make db-create first"; exit 1; fi; \
-	if [ "$$ui" != "$$ingest" ]; then echo "error: database_id differs between $(UI_CONFIG) and $(INGEST_CONFIG); both Workers must use one database"; exit 1; fi
-	@if grep -q 'INGEST_URL.*\.example\.' $(UI_CONFIG); then echo "note: INGEST_URL in $(UI_CONFIG) is still the example; the keys page will show the wrong address until it is set"; fi
+check-config: ## Stop unless deploy.local.env is usable and the committed configs are still examples
+	@$(DEPLOY_CONFIG) check
 
-db-migrate: check-config ## 2. Create or update the tables in the real database (migrations/)
-	$(WRANGLER) d1 migrations apply $(DB) --remote -c $(UI_CONFIG)
+ingest-config: ## Write the receiver's real config (ingest/wrangler.deploy.json) from deploy.local.env
+	@$(DEPLOY_CONFIG) ingest
+
+db-migrate: ingest-config ## 2. Create or update the tables in the real database (migrations/)
+	$(WRANGLER) d1 migrations apply $(DB) --remote -c $(INGEST_DEPLOY)
 
 # The key is generated here, handed to both Workers and kept nowhere else. Nobody needs to know it.
 # Setting a new one makes the signing secrets already stored unreadable, hence the check.
@@ -133,7 +141,7 @@ secrets: ## 4. After the first deploy: give both Workers the same new SECRETS_KE
 	printf '%s' "$$KEY" | $(WRANGLER) secret put SECRETS_KEY -c $(INGEST_CONFIG) && \
 	printf '%s' "$$KEY" | $(WRANGLER) secret put SECRETS_KEY -c $(UI_CONFIG)
 
-admin: ## 5. Create or reset an admin in the real database: make admin NAME=you
+admin: ingest-config ## 5. Create or reset an admin in the real database: make admin NAME=you
 	@[ -n "$(NAME)" ] || { echo "usage: make admin NAME=<username>"; exit 1; }
 	$(BUN) scripts/create-admin.ts $(NAME) --remote
 
@@ -142,10 +150,12 @@ admin: ## 5. Create or reset an admin in the real database: make admin NAME=you
 .PHONY: deploy deploy-ingest deploy-ui tail-ingest tail-ui
 deploy: check db-migrate deploy-ingest deploy-ui ## 3. Check, migrate, then upload both Workers
 
-deploy-ingest: check-config ## Upload only the receiver
-	$(WRANGLER) deploy -c $(INGEST_CONFIG)
+deploy-ingest: ingest-config ## Upload only the receiver
+	$(WRANGLER) deploy -c $(INGEST_DEPLOY)
 
+# The build writes .output/server/wrangler.json from $(UI_CONFIG); your values go into that copy
 deploy-ui: check-config build ## Build and upload only the UI
+	@$(DEPLOY_CONFIG) ui
 	$(WRANGLER) deploy
 
 tail-ingest: ## Follow the receiver's live log
@@ -158,7 +168,7 @@ tail-ui: ## Follow the UI Worker's live log (the audit lines are here)
 
 .PHONY: clean reset-local-db
 clean: ## Delete build output and caches (node_modules and the local database stay)
-	rm -rf .output .nuxt .data dist node_modules/.cache/nuxt .wrangler/deploy .wrangler/tmp ingest/.wrangler
+	rm -rf .output .nuxt .data dist node_modules/.cache/nuxt .wrangler/deploy .wrangler/tmp ingest/.wrangler $(INGEST_DEPLOY)
 
 reset-local-db: ## Delete the local database and everything in it, then create it again empty
 	rm -rf $(STATE)

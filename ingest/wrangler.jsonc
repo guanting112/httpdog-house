@@ -1,9 +1,12 @@
 // The receiving Worker: httpdog POSTs its alerts to <this Worker>/alerts.
 //
 // Plain TypeScript with no framework; wrangler bundles src/index.ts as it is. It shares one D1
-// database with the UI Worker (../wrangler.jsonc): `database_id` must be the same in both files.
+// database with the UI Worker (../wrangler.jsonc).
 //
-// Deploy with `make deploy-ingest` from the repository root.
+// This file is committed, so what is yours stays out of it: the database id and your hostname go
+// in ../deploy.local.env (see ../deploy.local.env.example). `make deploy-ingest`, run from the
+// repository root, writes wrangler.deploy.json next to this file with them and deploys from that.
+// The values below are examples; deploying refuses to go on if they are replaced here.
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "httpdog-house-ingest",
@@ -14,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "httpdog-house",
-      // Replace with the id that `make db-create` prints. The same id goes in ../wrangler.jsonc
+      // An example: the real id is DATABASE_ID in ../deploy.local.env
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../migrations"
     }
@@ -36,9 +39,10 @@
   // SECRETS_KEY is a secret, not a var: set it with `make secrets`.
 
   // By default the Worker is served from httpdog-house-ingest.<your account>.workers.dev.
-  // To give it a hostname of your own (the zone must be in the same Cloudflare account):
+  // To give it a hostname of your own (the zone must be in the same Cloudflare account), set
+  // INGEST_DOMAIN in ../deploy.local.env. The generated config then gets:
   //
-  // "routes": [{ "pattern": "hook.example.com", "custom_domain": true }],
+  // "routes": [{ "pattern": "<INGEST_DOMAIN>", "custom_domain": true }],
   // "workers_dev": false,
   // "preview_urls": false
 }

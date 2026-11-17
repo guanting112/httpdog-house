@@ -71,13 +71,15 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 
 所有東西都在你的機器上 build,再用 wrangler 上傳。每台機器先執行一次 `make login`。
 
-1. **建立資料庫。** 執行 `make db-create`,把它印出的 `database_id` 填進 `wrangler.jsonc` 與 `ingest/wrangler.jsonc` **兩個檔案**。兩個 Worker 必須指向同一個資料庫;不一致時 `make check-config` 會擋下部署。
-2. **部署。** `make deploy` 會跑檢查、建立資料表,並上傳兩個 Worker。兩者各有一個 `workers.dev` 網址;要用自己的網域,請看兩個 `wrangler.jsonc` 裡註解掉的 `routes`。
+1. **建立資料庫。** `make db-create` 會建立資料庫,並從範例檔產生 `deploy.local.env`。把它印出的 `database_id` 填進那個檔案的 `DATABASE_ID`。兩個 `wrangler.jsonc` 維持原樣,不要改。
+2. **部署。** `make deploy` 會跑檢查、建立資料表,並上傳兩個 Worker。兩者各有一個 `workers.dev` 網址;要用自己的網域,請在 `deploy.local.env` 設定 `UI_DOMAIN` 與 `INGEST_DOMAIN`。
 3. **給兩個 Worker 同一組 `SECRETS_KEY`。** `make secrets` 會產生一組並設定到兩邊。它是用來加密資料庫裡簽章 secret 的金鑰,不會存在其他地方,也沒有人需要知道它的內容。
-4. **告訴介面接收端在哪裡。** 把 `wrangler.jsonc` 裡的 `INGEST_URL` 設成接收端的網址(結尾是 `/alerts`),再執行 `make deploy-ui`。金鑰頁面會把這個網址放進要複製到主機上的設定裡。
+4. **告訴介面接收端在哪裡。** 把 `deploy.local.env` 裡的 `INGEST_URL` 設成接收端的網址(結尾是 `/alerts`),再執行 `make deploy-ui`。已經設定 `INGEST_DOMAIN` 的話不用做這一步,網址會跟著它。金鑰頁面會把這個網址放進要複製到主機上的設定裡。
 5. **建立第一個管理員。** `make admin NAME=you`。
 
 之後 `make deploy` 就是完整的部署。`make deploy-ingest` 與 `make deploy-ui` 則各上傳一個 Worker。
+
+**你自己的資料不會進到 repository。** `deploy.local.env` 放的是資料庫 id、接收端網址與你的網域,Git 會忽略它。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這兩個檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 clone 不帶任何人的部署資料,你也可以繼續從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
 
 接收端的設定在 `ingest/wrangler.jsonc`:
 
@@ -197,14 +199,16 @@ notifiers:
 | `app/content/en.ts`、`zh-tw.ts` | 介面上所有的文字,一種語言一個檔案,結構相同。改其中一份就要改另一份 |
 | `app/assets/css/main.css` | 兩種主題的顏色、字型與共用的 class。深色外觀沿用 httpdog 的網站 |
 | `migrations/` | 資料庫結構 |
-| `scripts/` | `create-admin.ts` 與 `send-test-alert.ts` |
+| `scripts/` | `create-admin.ts`、`send-test-alert.ts`,以及產生部署用設定檔的 `deploy-config.ts` |
+| `deploy.local.env.example` | 部署時需要你提供的值。你自己的那份 `deploy.local.env` 不會進版本控制 |
 | `test/` | 單元測試。`d1.ts` 用記憶體內的 SQLite 加上真的資料表結構來代替 D1 |
-| `wrangler.jsonc` | 介面的 Worker。`nuxt build` 會把它合併到 `.output/server/wrangler.json` |
+| `wrangler.jsonc` | 介面的 Worker,裡面是範例值。`nuxt build` 會把它合併到 `.output/server/wrangler.json` |
 
 給修改這個專案的人:
 
 - **要與 httpdog 保持一致。** 請求內容、標頭與簽章是 httpdog 的對外介面(`docs/webhook.md`、`src/notify.rs`)。`test/shared.test.ts` 用 httpdog 自己測試用的同一組向量檢查簽章。
 - **wrangler 與產生出來的設定檔。** build 之後,不帶 `-c` 執行的 wrangler 會使用 Nitro 產生的設定檔。這對部署介面是對的,對其他事情都是錯的,所以 `Makefile` 一律帶 `-c`。
+- **有進版本控制的設定檔裡不放真的值。** 真實部署的資料庫 id、網址或網域一律放在 `deploy.local.env`,不要寫進 `wrangler.jsonc`。要新增這類的值時,在 `deploy.local.env.example` 加一行,並由 `scripts/deploy-config.ts` 填進設定檔。
 - **請求自己的網址。** 在 Workers 上,h3 的 `getRequestURL()` 會把 HTTPS 請求說成 `http://`。需要真正來源的程式,請用 `server/utils/http.ts` 的 `requestOrigin()`。
 - **字型。** Ubuntu Mono,只載入 Latin 子集,由這個網站自己提供。中文會退回系統字型。
 - **深色與淺色。** 所有顏色都來自 `main.css` 最上面的變數;`<html data-theme="light">` 會換成第二組數值。新增顏色時要做成變數,並為兩種主題各給一個值,不要在元件裡直接寫色碼。主題以瀏覽器裡選過的為準(頁首、登入頁或帳號頁都能切換),沒選過就跟隨系統;`nuxt.config.ts` 裡有一小段 inline script 會在畫面繪製前先設定好。
@@ -213,7 +217,8 @@ notifiers:
 
 ## 驗證過的範圍
 
-- `make check`:型別檢查,以及 35 個單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對,以及用真的資料表結構測接收端:接受、重複送達、每一種拒絕原因,還有每日清理。
+- `make check`:型別檢查,以及 43 個單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),以及從 `deploy.local.env` 產生的設定檔。
+- 用一份虛構的 `deploy.local.env`,`wrangler deploy --dry-run` 接受了兩個產生出來的設定檔。
 - 在一台機器上(macOS、wrangler 4.163.0),兩個 Worker 都跑在 wrangler 的本機執行環境裡:真的 `httpdog` 執行檔重播 `sample.log`,3 則已簽章的告警都送達;改用錯的 secret 時,9 次嘗試全部被拒絕並留下紀錄。
 - 用 headless Chrome 對 build 後的介面測試,HTTP 與 HTTPS 都跑過:登入、新告警即時出現、篩選、金鑰的建立、編輯、停用與刪除(每一步之後都檢查接收端的回應)、viewer 被擋在管理頁面與管理 API 之外、變更密碼,以及兩種語言、兩種主題在桌機與手機寬度下的頁面。
 - **沒有驗證:Cloudflare 上的任何東西。** 還沒有部署過,所以真正的 D1、速率限制、每日排程,以及免費方案的 CPU 上限都沒有測過。

@@ -2,10 +2,12 @@
 //
 // `nuxt build` merges this file with the two things Nitro decides (the entry file and the assets
 // directory) into .output/server/wrangler.json; `wrangler deploy` then uses that. So set bindings
-// and domains here, and deploy with `make deploy-ui`, which builds first.
+// here, and deploy with `make deploy-ui`, which builds first.
 //
-// It shares one D1 database with the ingest Worker (ingest/wrangler.jsonc): `database_id` must be
-// the same in both files.
+// This file is committed, so what is yours stays out of it: the database id, INGEST_URL and your
+// hostname go in deploy.local.env (see deploy.local.env.example), and `make deploy-ui` puts them
+// into the generated config. The values below are examples; deploying refuses to go on if they
+// are replaced here.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "httpdog-house-ui",
@@ -15,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "httpdog-house",
-      // Replace with the id that `make db-create` prints. The same id goes in ingest/wrangler.jsonc
+      // An example: the real id is DATABASE_ID in deploy.local.env
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
@@ -23,7 +25,8 @@
 
   "vars": {
     // Where httpdog should POST: the address of the ingest Worker, ending in /alerts.
-    // The keys page shows it in the lines to copy to a host
+    // The keys page shows it in the lines to copy to a host. An example: set INGEST_URL (or
+    // INGEST_DOMAIN) in deploy.local.env
     "INGEST_URL": "https://httpdog-house-ingest.example.workers.dev/alerts"
   },
 
@@ -37,9 +40,10 @@
   // SECRETS_KEY is a secret, not a var: set it with `make secrets`.
 
   // By default the Worker is served from httpdog-house-ui.<your account>.workers.dev.
-  // To give it a hostname of your own (the zone must be in the same Cloudflare account):
+  // To give it a hostname of your own (the zone must be in the same Cloudflare account), set
+  // UI_DOMAIN in deploy.local.env. The generated config then gets:
   //
-  // "routes": [{ "pattern": "alerts.example.com", "custom_domain": true }],
+  // "routes": [{ "pattern": "<UI_DOMAIN>", "custom_domain": true }],
   // "workers_dev": false,
   // "preview_urls": false
 }

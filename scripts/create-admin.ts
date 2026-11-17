@@ -2,7 +2,8 @@
 // back in when the only admin has forgotten their password.
 //
 //   bun scripts/create-admin.ts <username> --local     the local database `make dev` uses
-//   bun scripts/create-admin.ts <username> --remote    the real D1 database (needs `wrangler login`)
+//   bun scripts/create-admin.ts <username> --remote    the real D1 database (needs `wrangler login`;
+//                                                      `make admin` writes the config it reads first)
 //
 // It asks for the password, hashes it here the same way the UI does, and writes the row with
 // `wrangler d1 execute`. The UI has no "first run" page on purpose: a page that lets whoever
@@ -79,8 +80,11 @@ const sql = `
   DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = '${username}');
 `
 
-// -c: after a build, wrangler would otherwise follow .wrangler/deploy to the generated config
-const wrangler = Bun.spawn(['bunx', 'wrangler', 'd1', 'execute', DATABASE, where, '-c', 'wrangler.jsonc', '--yes', '--command', sql], {
+// -c: after a build, wrangler would otherwise follow .wrangler/deploy to the generated config.
+// The real database is named only in the config `make admin` generates from deploy.local.env;
+// wrangler.jsonc has an example id, which is all the local database needs
+const config = where === '--remote' ? 'ingest/wrangler.deploy.json' : 'wrangler.jsonc'
+const wrangler = Bun.spawn(['bunx', 'wrangler', 'd1', 'execute', DATABASE, where, '-c', config, '--yes', '--command', sql], {
   stdout: 'pipe',
   stderr: 'inherit',
 })

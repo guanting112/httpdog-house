@@ -71,13 +71,15 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 
 Everything is built on your machine and uploaded with wrangler. `make login` once per machine.
 
-1. **Create the database.** `make db-create`, then put the `database_id` it prints into **both** `wrangler.jsonc` and `ingest/wrangler.jsonc`. The two Workers must name the same database; `make check-config` stops a deploy when they do not.
-2. **Deploy.** `make deploy` runs the checks, creates the tables and uploads both Workers. Each gets a `workers.dev` address; to use your own hostnames, see the commented `routes` in the two `wrangler.jsonc` files.
+1. **Create the database.** `make db-create` creates it and writes `deploy.local.env` from its example. Put the `database_id` it prints in that file as `DATABASE_ID`. Leave the two `wrangler.jsonc` files as they are.
+2. **Deploy.** `make deploy` runs the checks, creates the tables and uploads both Workers. Each gets a `workers.dev` address; to use your own hostnames, set `UI_DOMAIN` and `INGEST_DOMAIN` in `deploy.local.env`.
 3. **Give both Workers the same `SECRETS_KEY`.** `make secrets` generates one and sets it on both. It is the key that encrypts the signing secrets in the database; it is stored nowhere else and nobody needs to know it.
-4. **Tell the UI where the receiver is.** Set `INGEST_URL` in `wrangler.jsonc` to the receiver's address ending in `/alerts`, then `make deploy-ui`. The keys page shows this address in the lines to copy to a host.
+4. **Tell the UI where the receiver is.** Set `INGEST_URL` in `deploy.local.env` to the receiver's address ending in `/alerts`, then `make deploy-ui`. With `INGEST_DOMAIN` set there is nothing to do: the address follows it. The keys page shows this address in the lines to copy to a host.
 5. **Create the first admin.** `make admin NAME=you`.
 
 After that, `make deploy` is the whole deploy. `make deploy-ingest` and `make deploy-ui` upload one Worker each.
+
+**What is yours stays out of the repository.** `deploy.local.env` holds the database id, the receiver's address and your hostnames, and Git ignores it. The two `wrangler.jsonc` files are committed and keep their example values; the deploy targets put your values into generated configs (`ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too. `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public clone carries nobody's deployment, and you can go on deploying from the checkout you push from. Secrets were never in a file that is committed: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
 
 Settings of the receiver, in `ingest/wrangler.jsonc`:
 
@@ -197,14 +199,16 @@ Check Cloudflare's own pages for today's numbers; this is what the design leans 
 | `app/content/en.ts`, `zh-tw.ts` | Every word the UI shows, one file per language, same shape. Change both together |
 | `app/assets/css/main.css` | Colours for both themes, type and the shared classes. The dark look is httpdog's website |
 | `migrations/` | The database schema |
-| `scripts/` | `create-admin.ts` and `send-test-alert.ts` |
+| `scripts/` | `create-admin.ts`, `send-test-alert.ts`, and `deploy-config.ts`, which writes the configs to deploy from |
+| `deploy.local.env.example` | What a deployment needs from you. Your copy, `deploy.local.env`, is not committed |
 | `test/` | Unit tests. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
-| `wrangler.jsonc` | The UI's Worker. `nuxt build` merges it into `.output/server/wrangler.json` |
+| `wrangler.jsonc` | The UI's Worker, with example values. `nuxt build` merges it into `.output/server/wrangler.json` |
 
 Notes for whoever edits it:
 
 - **Keep it true to httpdog.** The body, the headers and the signature are httpdog's public interface (`docs/webhook.md`, `src/notify.rs`). `test/shared.test.ts` checks the signature against the same vector httpdog tests itself with.
 - **wrangler and the generated config.** After a build, wrangler run without `-c` uses the config Nitro generated. That is right for deploying the UI and wrong for everything else, so the `Makefile` always passes `-c`.
+- **Nothing real in a committed config.** A database id, an address or a hostname of a real deployment goes in `deploy.local.env`, never in a `wrangler.jsonc`. A new value of that kind gets a line in `deploy.local.env.example` and is put in place by `scripts/deploy-config.ts`.
 - **The request's own address.** On Workers, h3's `getRequestURL()` says `http://` for an HTTPS request. Code that needs the real origin uses `requestOrigin()` in `server/utils/http.ts`.
 - **Fonts.** Ubuntu Mono, Latin subset, served from this site. Chinese text falls back to the system font.
 - **Dark and light.** Every colour comes from the tokens at the top of `main.css`; `<html data-theme="light">` swaps in the second set. A new colour goes in as a token with a value for each theme, never as a literal in a component. The theme is the one chosen in the browser (header, sign-in page or account page), else the system's; a small inline script in `nuxt.config.ts` sets it before the first paint.
@@ -213,7 +217,8 @@ Notes for whoever edits it:
 
 ## What has been checked
 
-- `make check`: type checks, and 35 unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, and the receiver against the real schema: accepted, repeated, refused for each reason, and the daily clean-up.
+- `make check`: type checks, and 43 unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, the receiver against the real schema (accepted, repeated, refused for each reason, and the daily clean-up), and the configs generated from `deploy.local.env`.
+- With an invented `deploy.local.env`, `wrangler deploy --dry-run` accepted both generated configs.
 - On one machine (macOS, wrangler 4.163.0), with both Workers running in wrangler's local runtime: the real `httpdog` binary replaying `sample.log` delivered its 3 signed alerts, and with a wrong secret all 9 attempts were refused and recorded.
 - In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of a new alert, filters, creating, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer being kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
 - **Not checked: anything on Cloudflare itself.** Nothing has been deployed, so the real D1, the rate limiter, the daily timer and the CPU limit of the free plan are untested.
