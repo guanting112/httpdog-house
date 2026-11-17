@@ -23,6 +23,16 @@
     }
   ],
 
+  // Every request comes to the Worker first, the files of public/ included: the door
+  // (server/middleware/01.door.ts) answers "not found" to all of it until a browser has been to
+  // the entry address. Two things make that so, and `make deploy-ui` refuses to upload without them:
+  //   run_worker_first    here, or Cloudflare hands out the files on its own, to anyone
+  //   a binding "FILES"   or Nitro does: its Worker entry gives a file to whoever asks as soon as
+  //                       it finds a binding called ASSETS, before any middleware runs. Nitro writes
+  //                       that name into the config it generates whatever is said here, so the
+  //                       build renames it afterwards (`bun run build`, scripts/deploy-config.ts)
+  "assets": { "run_worker_first": true },
+
   "vars": {
     // Where httpdog should POST: the address of the ingest Worker, ending in /alerts.
     // The keys page shows it in the lines to copy to a host. An example: a deployment gets

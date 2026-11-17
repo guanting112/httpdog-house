@@ -19,7 +19,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 
 - **Each is a name under a domain that is in the same Cloudflare account**, and the two are different.
 - **Neither has a DNS record yet.** Each becomes a Custom Domain of its Worker: Cloudflare makes the DNS record and the certificate when the Worker is uploaded, so there is nothing to add by hand. A new hostname can take a minute or two to answer.
-- **A hostname is not a secret.** The certificate made for it is logged in public, as certificates are, so anyone can come across the name. One that does not say what it is for gives less away. What protects the UI is its login; to keep strangers from reaching even the sign-in page, put Cloudflare Access in front of `UI_DOMAIN`. The receiver has to stay open to your hosts.
+- **A hostname is not a secret.** The certificate made for it is logged in public, as certificates are, and scanners visit every hostname they learn of. So the UI shows a stranger nothing: see [the sign-in address](#the-sign-in-address) below. A name that does not say what it is for gives less away still. The receiver has to stay open to your hosts; it answers "not found" to anything but an alert.
 - **Changing a hostname later** is the same two lines and `make deploy`. Hosts then need the new address in `HTTPDOG_WEBHOOK_URL`, and alerts sent to the old one are lost.
 
 `make setup` in a checkout that has no `deploy.local.env` writes the file for you, says the above, and stops.
@@ -29,7 +29,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 | Step | What happens |
 |---|---|
 | Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created |
-| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
+| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` in `deploy.local.env`, unless there is one |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
 | 4. Receiver | Uploads the ingest Worker at `INGEST_DOMAIN`. Cloudflare makes the hostname's DNS record and certificate |
@@ -38,6 +38,23 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 | 7. First admin | Asks for a username, then twice for a password. Skipped when there is an admin already |
 
 It is safe to run again. Each step looks at what is there and does only what is missing, so after a failure it carries on from where it stopped, and on a finished deployment it only uploads the two Workers again.
+
+## The sign-in address
+
+`make setup` ends with it, and `make entry` shows it again:
+
+```
+https://<UI_DOMAIN>/<ENTRY_PATH>
+```
+
+It is the one address of the UI that answers a browser it has not seen. Everything else, the hostname alone, `/login`, the API and every file, answers the same `not found` to such a browser: there is no sign-in page to come across, no title, no icon, nothing that says what runs here.
+
+- **Opening the address once is enough.** It leaves a cookie and sends the browser on to the sign-in page. From then on that browser can use the hostname as it is, for 400 days, and opening the address again renews that.
+- **Each browser and each person needs it once.** Give a new user the address together with their account.
+- **`ENTRY_PATH` is in `deploy.local.env`.** `make setup` makes one of 30 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
+- **To change it**, set another and run `make deploy-ui`. Every browser is turned away again until it has been to the new address. Sessions are not ended by this; signing in is as before once a browser is through.
+- **It is not a password.** It keeps strangers and scanners from seeing what is here; what protects the alerts is still the login behind it. The address ends up in browser histories and in whatever it was sent through, so treat it as something to keep to yourselves, and change it when someone leaves.
+- **On a machine there is no door**: `make dev` and `make preview` answer at every address.
 
 ## Every time after: `make deploy`
 
@@ -51,6 +68,7 @@ The one place for what differs from one deployment to the next:
 |---|---|
 | `UI_DOMAIN`, `INGEST_DOMAIN` | **Required, and yours to fill in.** The two hostnames, see above. The address httpdog is given follows from the second: `https://<INGEST_DOMAIN>/alerts` |
 | `DATABASE_ID` | The id of the D1 database. Filled in by `make setup` |
+| `ENTRY_PATH` | The last piece of the sign-in address, see above. Filled in by `make setup` unless you set one |
 | `NAME_SUFFIX` | Only for another deployment in the same account, see below |
 | `RETENTION_DAYS`, `MAX_SKEW_SECS` | Settings of the receiver, see below |
 

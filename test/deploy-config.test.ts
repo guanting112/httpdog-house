@@ -1,14 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { applyValues, ingestUrl, leak, limiterNamespace, parseEnv, PLACEHOLDER, readDomains, readValues, type WranglerConfig } from '../scripts/deploy-config'
+import { applyValues, behindTheDoor, entryUrl, ingestUrl, leak, limiterNamespace, parseEnv, PLACEHOLDER, readDomains, readValues, type WranglerConfig } from '../scripts/deploy-config'
 
 const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
 /** What every deployment has to have: its two hostnames */
 const HOSTS = { UI_DOMAIN: 'alerts.example.com', INGEST_DOMAIN: 'hook.example.com' }
+const ENTRY = 'a-name-nobody-would-guess'
 /** A file that is complete */
-const FILE = { ...HOSTS, DATABASE_ID: ID }
-const VALUES = { databaseId: ID, uiDomain: 'alerts.example.com', ingestDomain: 'hook.example.com' }
+const FILE = { ...HOSTS, DATABASE_ID: ID, ENTRY_PATH: ENTRY }
+const VALUES = { databaseId: ID, uiDomain: 'alerts.example.com', ingestDomain: 'hook.example.com', entryPath: ENTRY }
 const template = (path: string) => Bun.JSONC.parse(readFileSync(resolve(import.meta.dir, '..', path), 'utf8')) as WranglerConfig
 
 describe('deploy.local.env', () => {
@@ -64,7 +65,38 @@ describe('the two hostnames', () => {
     expect(ingestUrl(VALUES)).toBe('https://hook.example.com/alerts')
     // a line left by an older file is not read
     const values = readValues({ ...FILE, INGEST_URL: 'https://httpdog-house-ingest.someone.workers.dev/alerts' })
-    expect(applyValues(template('wrangler.jsonc'), values, 'ui').vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts' })
+    expect(applyValues(template('wrangler.jsonc'), values, 'ui').vars).toMatchObject({ INGEST_URL: 'https://hook.example.com/alerts' })
+  })
+})
+
+describe('the entry path', () => {
+  test('no deploy goes on without one: the UI would answer at its bare hostname', () => {
+    const { ENTRY_PATH: _, ...without } = FILE
+    expect(() => readValues(without)).toThrow('ENTRY_PATH is not set')
+    expect(() => readValues({ ...FILE, ENTRY_PATH: '' })).toThrow('ENTRY_PATH is not set')
+    for (const bad of ['short', 'two/parts-here', 'with space1']) expect(() => readValues({ ...FILE, ENTRY_PATH: bad })).toThrow('ENTRY_PATH')
+  })
+
+  test('the UI gets it, the receiver does not, and the sign-in address ends in it', () => {
+    expect(applyValues(template('wrangler.jsonc'), VALUES, 'ui').vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts', ENTRY_PATH: ENTRY })
+    expect(applyValues(template('ingest/wrangler.jsonc'), VALUES, 'ingest').vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365' })
+    expect(entryUrl(VALUES)).toBe(`https://alerts.example.com/${ENTRY}`)
+  })
+
+  test('the committed config asks for every request to reach the Worker first, and has no entry path', () => {
+    const ui = template('wrangler.jsonc')
+    expect(ui.assets).toEqual({ run_worker_first: true })
+    expect(ui.vars?.ENTRY_PATH).toBeUndefined()
+    expect(leak({ ...ui, vars: { ...ui.vars, ENTRY_PATH: ENTRY } })).toBe('an entry path')
+  })
+
+  test('the built config keeps its files behind the door, or is not deployed', () => {
+    // as Nitro writes it: the binding it would hand files out through, before the door
+    const built = { name: 'httpdog-house-ui', assets: { run_worker_first: true, binding: 'ASSETS', directory: '../public' } }
+    expect(behindTheDoor(built).assets).toEqual({ run_worker_first: true, binding: 'FILES', directory: '../public' })
+    expect(behindTheDoor(behindTheDoor(built))).toEqual(behindTheDoor(built))
+    expect(() => behindTheDoor({ name: 'x', assets: { binding: 'ASSETS', directory: '../public' } })).toThrow('handed to anyone')
+    expect(() => behindTheDoor({ name: 'x' })).toThrow('handed to anyone')
   })
 })
 
@@ -120,7 +152,7 @@ describe('generated configs', () => {
   test('each Worker is served from its own hostname and from nowhere else', () => {
     const ui = applyValues(template('wrangler.jsonc'), VALUES, 'ui')
     expect(ui.d1_databases![0]!.database_id).toBe(ID)
-    expect(ui.vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts' })
+    expect(ui.vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts', ENTRY_PATH: ENTRY })
     expect(ui.routes).toEqual([{ pattern: 'alerts.example.com', custom_domain: true }])
     expect([ui.workers_dev, ui.preview_urls]).toEqual([false, false])
 
@@ -144,7 +176,7 @@ describe('generated configs', () => {
     expect(ingestVars({ RETENTION_DAYS: '30' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '30' })
     expect(ingestVars({ RETENTION_DAYS: '0', MAX_SKEW_SECS: '0600' })).toEqual({ MAX_SKEW_SECS: '600', RETENTION_DAYS: '0' })
     // they are the receiver's alone
-    expect(applyValues(template('wrangler.jsonc'), readValues({ ...FILE, RETENTION_DAYS: '30' }), 'ui').vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts' })
+    expect(applyValues(template('wrangler.jsonc'), readValues({ ...FILE, RETENTION_DAYS: '30' }), 'ui').vars).toEqual({ INGEST_URL: 'https://hook.example.com/alerts', ENTRY_PATH: ENTRY })
   })
 
   test('a setting that is not a whole number stops the deploy, since the receiver would quietly use its default', () => {

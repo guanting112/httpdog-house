@@ -58,11 +58,15 @@ help: ## List every target
 
 # setup is safe to run again: each step looks at what is there and does only what is missing
 # (scripts/setup.ts). With DEPLOY_ENV=deploy.<suffix>.env it sets up another deployment
-.PHONY: setup deploy
+.PHONY: setup deploy entry
 setup: install ## The first time: log in, create the database, upload both Workers, set their key, make an admin
 	@$(BUN) scripts/setup.ts
 
 deploy: check db-migrate deploy-ingest deploy-ui ## Every time after: check, update the tables, upload both Workers
+
+# The hostname alone answers "not found". This is the address that does not
+entry: ## Show the address to sign in at: https://<UI_DOMAIN>/<ENTRY_PATH>
+	@$(DEPLOY_CONFIG) entry
 
 ##@ Local development
 

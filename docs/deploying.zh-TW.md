@@ -19,7 +19,7 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 
 - **兩個都要是同一個 Cloudflare 帳號裡某個網域底下的名稱**,而且不能相同。
 - **兩個都還沒有 DNS 紀錄。** 它們會各自成為所屬 Worker 的 Custom Domain:上傳 Worker 時 Cloudflare 會建立 DNS 紀錄與憑證,不需要手動加任何東西。新的主機名稱可能要一兩分鐘才會有回應。
-- **主機名稱不是祕密。** 為它簽發的憑證會像所有憑證一樣登錄在公開的紀錄裡,所以任何人都可能看到這個名稱。取一個看不出用途的名稱,透露的就比較少。真正保護介面的是登入;如果連登入頁都不想讓陌生人看到,可以在 `UI_DOMAIN` 前面加上 Cloudflare Access。接收端則必須對你的主機開放。
+- **主機名稱不是祕密。** 為它簽發的憑證會像所有憑證一樣登錄在公開的紀錄裡,掃描器也會去拜訪它得知的每一個主機名稱。所以介面不會讓陌生人看到任何東西:見下方的[登入網址](#登入網址)。取一個看不出用途的名稱,透露的就更少。接收端則必須對你的主機開放;除了告警之外,它對任何請求都只回「not found」。
 - **之後要換主機名稱**,改這兩行再執行 `make deploy` 就可以。主機上的 `HTTPDOG_WEBHOOK_URL` 要跟著換成新的網址,送到舊網址的告警會遺失。
 
 在沒有 `deploy.local.env` 的 checkout 裡執行 `make setup`,它會替你建立這個檔案,說明上面這些事,然後停下來。
@@ -29,7 +29,7 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 | 步驟 | 做了什麼 |
 |---|---|
 | 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西 |
-| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號、要用哪兩個主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
+| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號、要用哪兩個主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup`。回答 yes 之後,如果 `deploy.local.env` 還沒有 `ENTRY_PATH`,它會寫入一個新的 |
 | 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它 |
 | 3. 資料表 | 套用 `migrations/`。wrangler 會先問你要不要繼續 |
 | 4. 接收端 | 把 ingest Worker 上傳到 `INGEST_DOMAIN`。Cloudflare 會建立這個主機名稱的 DNS 紀錄與憑證 |
@@ -38,6 +38,23 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 | 7. 第一個管理員 | 問使用者名稱,再問兩次密碼。已經有管理員時會略過 |
 
 重複執行是安全的。每一步都會先看現況,只做還缺的部分,所以失敗之後會從停下來的地方接著做;對已經完成的部署,它只會重新上傳兩個 Worker。
+
+## 登入網址
+
+`make setup` 最後會印出它,`make entry` 可以再顯示一次:
+
+```
+https://<UI_DOMAIN>/<ENTRY_PATH>
+```
+
+對沒見過的瀏覽器,介面只有這一個網址會有回應。其他的一切,包括只打主機名稱、`/login`、API 和每一個檔案,都只會回同樣的 `not found`:沒有登入頁可以被碰巧找到,沒有標題、沒有圖示,沒有任何東西說明這裡跑的是什麼。
+
+- **打開這個網址一次就夠了。** 它會留下一個 cookie,並把瀏覽器帶到登入頁。之後這個瀏覽器直接用主機名稱就可以,效期 400 天,再打開一次這個網址會重新計算。
+- **每個瀏覽器、每個人都要走一次。** 新增使用者時,把這個網址和帳號一起交給對方。
+- **`ENTRY_PATH` 放在 `deploy.local.env`。** `make setup` 會產生 30 個隨機字元,除非檔案裡已經有你自己設定的(8 到 64 個字母、數字、連字號或底線)。沒有它,任何部署都不會進行。
+- **要更換的話**,設定另一個再執行 `make deploy-ui`。在去過新的網址之前,每個瀏覽器都會再被擋在外面。這不會結束 session;瀏覽器通過之後,登入狀態和原本一樣。
+- **它不是密碼。** 它讓陌生人和掃描器看不到這裡有什麼;保護告警的仍然是後面的登入。這個網址會留在瀏覽器的歷史紀錄和傳送它的管道裡,所以請當成只有自己人知道的東西,有人離開時就換掉。
+- **在本機上沒有這道門**:`make dev` 與 `make preview` 在任何網址都會回應。
 
 ## 之後每一次:`make deploy`
 
@@ -51,6 +68,7 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 |---|---|
 | `UI_DOMAIN`、`INGEST_DOMAIN` | **必填,由你自己填。** 兩個主機名稱,見上方。給 httpdog 的網址由第二個決定:`https://<INGEST_DOMAIN>/alerts` |
 | `DATABASE_ID` | D1 資料庫的 id。由 `make setup` 填入 |
+| `ENTRY_PATH` | 登入網址的最後一段,見上方。由 `make setup` 填入,除非你自己設定了 |
 | `NAME_SUFFIX` | 只有在同一個帳號放另一套部署時才需要,見下方 |
 | `RETENTION_DAYS`、`MAX_SKEW_SECS` | 接收端的設定,見下方 |
 

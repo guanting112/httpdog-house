@@ -17,6 +17,7 @@ import { printable } from '../app/lib/format'
 import { BUCKET_SIZE, bucket, type Env, handleRequest } from '../ingest/src/receiver'
 import { parseEnv } from '../scripts/deploy-config'
 import { setEnvValue } from '../scripts/setup'
+import { door, doorToken, isEntryPath } from '../shared/door'
 import { fromBase64, fromHex, openSecret, randomBytes, sealSecret, secretFingerprint, signAlert, toBase64, toHex, utf8, verifyAlert } from '../shared/crypto'
 import { isInstanceName, matchesInstance, parsePatterns } from '../shared/instances'
 import { createTestDb } from './d1'
@@ -342,6 +343,33 @@ describe('fuzz: receiver', () => {
         const house = receiver()
         expect(await house.send(await signed(body))).toBe(401)
         expect(house.alerts()).toEqual([])
+      }),
+    )
+  })
+})
+
+// ---------------------------------------------------------------- the door of the UI
+
+describe('fuzz: the door', () => {
+  const entry = fc.string({ unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'), minLength: 8, maxLength: 64 })
+
+  test('whatever is asked for and whatever cookie is sent, a stranger gets in at the entry address only', async () => {
+    await fc.assert(
+      fc.asyncProperty(entry, fc.oneof(messy, messy.map((text) => `/${text}`), entry.map((other) => `/${other}`)), fc.option(fc.oneof(messy, hexDigits(64)), { nil: undefined }), async (name, path, cookie) => {
+        fc.pre(isEntryPath(name))
+        const state = await door(name, path, cookie)
+        const atEntry = path === `/${name}` || path === `/${name}/`
+        const hasCookie = cookie === (await doorToken(name))
+        expect(state).toBe(atEntry ? 'enter' : hasCookie ? 'open' : 'closed')
+      }),
+    )
+  })
+
+  test('the cookie of one entry path never opens another', async () => {
+    await fc.assert(
+      fc.asyncProperty(entry, entry, async (one, other) => {
+        fc.pre(one !== other)
+        expect(await door(other, '/', await doorToken(one))).toBe('closed')
       }),
     )
   })

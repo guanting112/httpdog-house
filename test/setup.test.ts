@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { INGEST_DEPLOY, LOCAL, LOCAL_EXAMPLE, parseEnv, UI_DEPLOY } from '../scripts/deploy-config'
+import { isEntryPath } from '../shared/door'
 import { findDatabase, readCount, setEnvValue, setup, SetupError, type Shell } from '../scripts/setup'
 
 const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
@@ -159,17 +160,21 @@ describe('make setup', () => {
       'make --no-print-directory secrets',
       'bun scripts/create-admin.ts guanting --remote',
     ])
-    expect(parseEnv(state.files[LOCAL]!)).toMatchObject({ DATABASE_ID: ID, UI_DOMAIN: 'alerts.example.com', INGEST_DOMAIN: 'hook.example.com' })
-    // the two addresses it ends with are the two hostnames, whatever wrangler printed
-    expect(result).toEqual({ ui: 'https://alerts.example.com', receiver: 'https://hook.example.com/alerts' })
+    const file = parseEnv(state.files[LOCAL]!)
+    expect(file).toMatchObject({ DATABASE_ID: ID, UI_DOMAIN: 'alerts.example.com', INGEST_DOMAIN: 'hook.example.com' })
+    // an entry path was made, and the address to sign in at ends in it: the hostname alone lets nobody in
+    expect(isEntryPath(file.ENTRY_PATH)).toBe(true)
+    expect(result).toEqual({ ui: `https://alerts.example.com/${file.ENTRY_PATH}`, receiver: 'https://hook.example.com/alerts' })
     // a name the UI would refuse is asked for again
     expect(state.asked).toBe(2)
   })
 
   test('run again, it only brings the deployment up to date', async () => {
-    const file = setEnvValue(READY, 'DATABASE_ID', ID)
+    const file = setEnvValue(setEnvValue(READY, 'DATABASE_ID', ID), 'ENTRY_PATH', 'the-one-already-in-use')
     const { state, shell } = account({ file, databases: [{ name: 'httpdog-house', uuid: ID }], keyOn: [INGEST_DEPLOY, UI_DEPLOY], admins: 1 })
-    await setup(shell)
+    const result = await setup(shell)
+    // the entry path people already use is kept
+    expect(result.ui).toBe('https://alerts.example.com/the-one-already-in-use')
 
     expect(state.ran).toEqual(['make --no-print-directory db-migrate', 'make --no-print-directory deploy-ingest', 'make --no-print-directory deploy-ui'])
     expect(state.files[LOCAL]).toBe(file)
@@ -187,6 +192,12 @@ describe('make setup', () => {
     const { state, shell } = account({ file: setEnvValue(READY, 'NAME_SUFFIX', 'team-a') })
     await setup(shell)
     expect(state.ran).toContain('bunx wrangler d1 create httpdog-house-team-a --update-config=false')
+  })
+
+  test('an entry path that could not be one piece of an address stops it before anything is uploaded', async () => {
+    const { state, shell } = account({ file: setEnvValue(READY, 'ENTRY_PATH', 'not/one piece') })
+    await expect(setup(shell)).rejects.toThrow('ENTRY_PATH')
+    expect(state.ran).toEqual([])
   })
 
   test('a step that fails stops there, and what was done is kept for the next run', async () => {

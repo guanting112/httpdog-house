@@ -8,8 +8,10 @@
 //
 //   bun scripts/deploy-config.ts check           stop unless the file is usable and the committed configs are still examples
 //   bun scripts/deploy-config.ts configs         check, then write wrangler.deploy.json and ingest/wrangler.deploy.json
-//   bun scripts/deploy-config.ts ui              check, then put the values into .output/server/wrangler.json (after `nuxt build`)
+//   bun scripts/deploy-config.ts built           after `nuxt build`: name the files binding in .output/server/wrangler.json
+//   bun scripts/deploy-config.ts ui              check, then put the values into .output/server/wrangler.json
 //   bun scripts/deploy-config.ts database-name   print the name to create the database with
+//   bun scripts/deploy-config.ts entry           print the address to sign in at
 //
 // One file is one deployment. A second deployment in the same Cloudflare account has a file of its
 // own with a NAME_SUFFIX, which names its two Workers and its database apart from the first's;
@@ -20,6 +22,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { isEntryPath } from '../shared/door'
 
 /** The database_id both committed configs ship with */
 export const PLACEHOLDER = '00000000-0000-0000-0000-000000000000'
@@ -46,6 +49,8 @@ export interface DeployValues {
   uiDomain: string
   /** The hostname httpdog POSTs to. The receiver's address follows from it: https://<it>/alerts */
   ingestDomain: string
+  /** The one path of the UI that lets a browser in (shared/door.ts): the sign-in address is https://<uiDomain>/<it> */
+  entryPath: string
   /** Settings of the receiver, as the whole numbers they are written as; undefined leaves the default of ingest/wrangler.jsonc */
   retentionDays?: string
   maxSkewSecs?: string
@@ -53,6 +58,7 @@ export interface DeployValues {
 
 export interface WranglerConfig {
   name?: string
+  assets?: { binding?: string; run_worker_first?: unknown; [key: string]: unknown }
   d1_databases?: { database_name?: string; database_id?: string }[]
   ratelimits?: { namespace_id?: string }[]
   vars?: Record<string, string>
@@ -129,6 +135,9 @@ export function readDomains(env: Record<string, string>): { uiDomain: string; in
 /** Where httpdog should POST */
 export const ingestUrl = (values: { ingestDomain: string }) => `https://${values.ingestDomain}/alerts`
 
+/** Where a person goes to sign in: the one address of the UI that answers a browser it has not seen */
+export const entryUrl = (values: { uiDomain: string; entryPath: string }) => `https://${values.uiDomain}/${values.entryPath}`
+
 /** The values of deploy.local.env, checked. Throws with a message meant for the terminal */
 export function readValues(env: Record<string, string>): DeployValues {
   const suffix = readSuffix(env)
@@ -137,6 +146,11 @@ export function readValues(env: Record<string, string>): DeployValues {
   const databaseId = env.DATABASE_ID ?? ''
   if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${LOCAL}. For a first deployment, run \`make setup\`: it creates the database and fills it in`)
   if (!UUID.test(databaseId)) throw new Error(`DATABASE_ID in ${LOCAL} does not look like a D1 database id`)
+
+  // Without it the UI would answer at its bare hostname, to anyone who comes across the name
+  const entryPath = env.ENTRY_PATH ?? ''
+  if (!entryPath) throw new Error(`ENTRY_PATH is not set in ${LOCAL}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess`)
+  if (!isEntryPath(entryPath)) throw new Error(`ENTRY_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<UI_DOMAIN>/<ENTRY_PATH>`)
 
   // The receiver falls back to its default for a setting it cannot read, which would hide a typing
   // mistake until alerts were deleted sooner or later than meant. So a mistake stops the deploy here
@@ -149,7 +163,7 @@ export function readValues(env: Record<string, string>): DeployValues {
   const retentionDays = wholeNumber('RETENTION_DAYS', 0, 'the days an alert is kept, or 0 to keep alerts forever')
   const maxSkewSecs = wholeNumber('MAX_SKEW_SECS', 1, "the seconds a request's timestamp may be from the receiver's clock")
 
-  return { databaseId, suffix, uiDomain, ingestDomain, retentionDays, maxSkewSecs }
+  return { databaseId, suffix, uiDomain, ingestDomain, entryPath, retentionDays, maxSkewSecs }
 }
 
 /** A copy of a Worker's config with the values in place of the examples */
@@ -167,7 +181,7 @@ export function applyValues(config: WranglerConfig, values: DeployValues, worker
   if (suffix && config.ratelimits) {
     result.ratelimits = config.ratelimits.map((limiter) => ({ ...limiter, namespace_id: limiterNamespace(limiter.namespace_id ?? '', suffix) }))
   }
-  if (worker === 'ui') result.vars = { ...config.vars, INGEST_URL: ingestUrl(values) }
+  if (worker === 'ui') result.vars = { ...config.vars, INGEST_URL: ingestUrl(values), ENTRY_PATH: values.entryPath }
   if (worker === 'ingest' && (values.retentionDays || values.maxSkewSecs)) {
     result.vars = {
       ...config.vars,
@@ -183,11 +197,28 @@ export function applyValues(config: WranglerConfig, values: DeployValues, worker
   return result
 }
 
+/** What the files of public/ are bound as in the built UI Worker (server/middleware/01.door.ts reads it) */
+export const FILES_BINDING = 'FILES'
+
+/**
+ * The built config of the UI Worker with its files behind the door. Nitro's Worker entry hands a
+ * file to whoever asks as soon as it finds a binding called ASSETS, before any middleware runs,
+ * and Nitro writes that name into the config it generates. Under another name, every request
+ * reaches the door first. Throws when the config would let files past it.
+ */
+export function behindTheDoor(built: WranglerConfig): WranglerConfig {
+  if (built.assets?.run_worker_first !== true) {
+    throw new Error('the built config does not send every request to the Worker first (assets.run_worker_first in wrangler.jsonc): the files of the UI would be handed to anyone')
+  }
+  return { ...built, assets: { ...built.assets, binding: FILES_BINDING } }
+}
+
 /** What makes a committed config no longer an example, or null when it still is one */
 export function leak(config: WranglerConfig): string | null {
   if ((config.d1_databases ?? []).some((database) => database.database_id !== PLACEHOLDER)) return 'a real database_id'
   if (config.routes !== undefined) return 'routes'
   if (config.vars?.INGEST_URL !== undefined && !config.vars.INGEST_URL.includes('.example.')) return 'a real INGEST_URL'
+  if (config.vars?.ENTRY_PATH !== undefined) return 'an entry path'
   return null
 }
 
@@ -234,18 +265,25 @@ if (import.meta.main) {
       const ui = applyValues(readTemplate(UI_TEMPLATE), values, 'ui')
       const ingest = applyValues(readTemplate(INGEST_TEMPLATE), values, 'ingest')
       // Said every time: with more than one deployment, this is how to see which one is about to change
+      // (the entry path is left out: this line ends up in scrollback and in pasted logs)
       console.log(`${LOCAL}: ${ui.name} at ${values.uiDomain}, ${ingest.name} at ${values.ingestDomain}, database ${ingest.d1_databases?.[0]?.database_name}`)
       write(UI_DEPLOY, ui)
       write(INGEST_DEPLOY, ingest)
+    } else if (command === 'entry') {
+      console.log(entryUrl(check()))
     } else if (command === 'database-name') {
       console.log(databaseName(existsSync(resolve(ROOT, LOCAL)) ? readSuffix(readLocal()) : undefined))
+    } else if (command === 'built') {
+      if (!existsSync(resolve(ROOT, UI_BUILT))) throw new Error(`${UI_BUILT} is missing: \`nuxt build\` has not run`)
+      write(UI_BUILT, behindTheDoor(JSON.parse(readFileSync(resolve(ROOT, UI_BUILT), 'utf8')) as WranglerConfig))
     } else if (command === 'ui') {
       const values = check()
       if (!existsSync(resolve(ROOT, UI_BUILT))) throw new Error(`${UI_BUILT} is missing: build the UI first (make deploy-ui does both)`)
       const built = JSON.parse(readFileSync(resolve(ROOT, UI_BUILT), 'utf8')) as WranglerConfig
-      write(UI_BUILT, applyValues(built, values, 'ui'))
+      // again here, so that a config built some other way is not uploaded with its files in the open
+      write(UI_BUILT, applyValues(behindTheDoor(built), values, 'ui'))
     } else {
-      throw new Error('usage: bun scripts/deploy-config.ts check | configs | ui | database-name')
+      throw new Error('usage: bun scripts/deploy-config.ts check | configs | built | ui | database-name | entry')
     }
   } catch (error) {
     console.error(`error: ${error instanceof Error ? error.message : error}`)

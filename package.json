@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nuxt dev",
     "dev:ingest": "wrangler dev -c ingest/wrangler.jsonc --port 8788 --persist-to .wrangler/state",
-    "build": "nuxt build",
+    "build": "nuxt build && bun scripts/deploy-config.ts built",
     "preview": "wrangler dev",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck && tsc -p ingest/tsconfig.json",

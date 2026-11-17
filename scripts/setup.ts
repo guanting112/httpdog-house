@@ -5,6 +5,8 @@
 //      it stops, having written the file if it was not there, and says what to put in it
 //   1. log in to Cloudflare if this machine is not logged in, then say which account that is and
 //      go on only after a yes
+//      (and note a new entry path in deploy.local.env, unless it has one: the one address of the
+//      UI that lets a browser in)
 //   2. create the D1 database and note its id in deploy.local.env
 //   3. create the tables
 //   4. upload the receiver, at its hostname
@@ -18,7 +20,8 @@
 import { closeSync, constants, existsSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { USERNAME } from '../server/utils/password'
-import { databaseName, HOSTNAMES_NEEDED, INGEST_DEPLOY, ingestUrl, LOCAL, LOCAL_EXAMPLE, parseEnv, readDomains, readSuffix, ROOT, UI_DEPLOY } from './deploy-config'
+import { isEntryPath, newEntryPath } from '../shared/door'
+import { databaseName, entryUrl, HOSTNAMES_NEEDED, INGEST_DEPLOY, ingestUrl, LOCAL, LOCAL_EXAMPLE, parseEnv, readDomains, readSuffix, ROOT, UI_DEPLOY } from './deploy-config'
 
 const WRANGLER = ['bunx', 'wrangler']
 const MAKE = ['make', '--no-print-directory']
@@ -151,6 +154,15 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
     throw new SetupError('Stopped before changing anything. To use another login: `bunx wrangler logout`, then `make setup` again.')
   }
 
+  // The entry path: the one address of the UI that answers a browser it has not seen. Made here
+  // unless the file has one already, before anything is uploaded: no deploy goes on without it
+  if (!values().ENTRY_PATH) {
+    set('ENTRY_PATH', newEntryPath())
+    shell.log(`noted a new entry path in ${LOCAL}: the UI will answer "not found" everywhere but there`)
+  } else if (!isEntryPath(values().ENTRY_PATH)) {
+    throw new SetupError(`ENTRY_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
+  }
+
   say('Database')
   if (values().DATABASE_ID) {
     shell.log(`already in ${LOCAL}`)
@@ -224,7 +236,7 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
     await must(['bun', 'scripts/create-admin.ts', name, '--remote'], `The admin was not created. ${later}`)
   }
 
-  return { ui: `https://${domains.uiDomain}`, receiver: ingestUrl(domains) }
+  return { ui: entryUrl({ uiDomain: domains.uiDomain, entryPath: values().ENTRY_PATH! }), receiver: ingestUrl(domains) }
 }
 
 /**
@@ -279,6 +291,10 @@ if (import.meta.main) {
     console.log('\nDone.')
     console.log(`  Sign in:         ${ui}`)
     console.log(`  httpdog POSTs:   ${receiver}`)
+    console.log('')
+    console.log('  Keep the sign-in address: it is the only one that lets a browser in. The hostname alone,')
+    console.log('  and every other address, answers "not found" until a browser has been there once.')
+    console.log(`  It is ENTRY_PATH in ${LOCAL}; \`make entry\` shows it again.`)
     console.log('  A new hostname can take a minute or two to answer, while its certificate is made.')
     console.log('  Next: on the keys page, make a key and follow "set up a host".')
     console.log('  Later: `git pull && make deploy` brings a deployment up to date.')

@@ -13,6 +13,8 @@ export interface UiEnv {
   INGEST_URL?: string
   /** Slows down password guessing. Absent when the binding is not configured */
   LOGIN_LIMITER?: RateLimit
+  /** The one path that lets a browser in (server/middleware/01.door.ts). Absent on a machine, set in every deployment */
+  ENTRY_PATH?: string
 }
 
 declare module 'h3' {
