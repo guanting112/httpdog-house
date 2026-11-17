@@ -94,7 +94,7 @@ describe('generated configs', () => {
 
   test('the receiver gets its settings, and keeps its defaults for those left empty', () => {
     const ingestVars = (env: Record<string, string>) => applyValues(template('ingest/wrangler.jsonc'), readValues({ DATABASE_ID: ID, ...env }), 'ingest').vars
-    expect(ingestVars({ RETENTION_DAYS: '', MAX_SKEW_SECS: '' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '400' })
+    expect(ingestVars({ RETENTION_DAYS: '', MAX_SKEW_SECS: '' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365' })
     expect(ingestVars({ RETENTION_DAYS: '30' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '30' })
     expect(ingestVars({ RETENTION_DAYS: '0', MAX_SKEW_SECS: '0600' })).toEqual({ MAX_SKEW_SECS: '600', RETENTION_DAYS: '0' })
     // they are the receiver's alone
@@ -120,7 +120,7 @@ describe('generated configs', () => {
 
     const ingest = applyValues(template('ingest/wrangler.jsonc'), values, 'ingest')
     expect(ingest.d1_databases![0]!.database_id).toBe(ID)
-    expect(ingest.vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '400' })
+    expect(ingest.vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '365' })
     expect(ingest.routes).toEqual([{ pattern: 'hook.example.com', custom_domain: true }])
   })
 })

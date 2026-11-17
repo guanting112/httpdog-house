@@ -20,7 +20,7 @@ export interface Env {
   SECRETS_KEY: string
   /** How far X-Httpdog-Timestamp may be from this Worker's clock, in seconds. Default 300 */
   MAX_SKEW_SECS?: string
-  /** Alerts older than this many days are deleted once a day. 0 keeps them forever. Default 400 */
+  /** Alerts older than this many days are deleted once a day. 0 keeps them forever. Default 365 */
   RETENTION_DAYS?: string
 }
 
@@ -29,7 +29,7 @@ const ALERTS_PATH = '/alerts'
 /** An alert is a few KB. httpdog's own input is one syslog datagram, so 256 KiB is far above any real body */
 const MAX_BODY_BYTES = 256 * 1024
 const DEFAULT_SKEW_SECS = 300
-const DEFAULT_RETENTION_DAYS = 400
+const DEFAULT_RETENTION_DAYS = 365
 
 /** Keys tried for one request. More than two would be unusual: one key, or two while a secret is being changed */
 const MAX_KEYS_TRIED = 8

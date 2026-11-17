@@ -307,7 +307,7 @@ describe('the daily clean-up', () => {
     await send(alertBody({ group: 'new' }))
     await send(alertBody({ rule: 'gone', group: 'old' }))
     await send(alertBody({ group: 'last season' }))
-    // the default is 400 days: 500 days ago is past it, 100 days ago is not
+    // the default is 365 days: 500 days ago is past it, 100 days ago is not
     const old = now() - 500 * 86400
     db.sqlite.run(`UPDATE alerts SET received_at = ${old} WHERE group_value = 'old'`)
     db.sqlite.run(`UPDATE alerts SET received_at = ${now() - 100 * 86400} WHERE group_value = 'last season'`)

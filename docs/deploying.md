@@ -71,7 +71,7 @@ Two more values of `deploy.local.env`. Left empty, the default applies.
 
 | Value | Default | Meaning |
 |---|---|---|
-| `RETENTION_DAYS` | `400` | How many days an alert is kept. Older ones are deleted once a day. `0` keeps alerts forever |
+| `RETENTION_DAYS` | `365` | How many days an alert is kept. Older ones are deleted once a day. `0` keeps alerts forever |
 | `MAX_SKEW_SECS` | `300` | How far a request's timestamp may be from the receiver's clock, in seconds. A request outside it is refused |
 
 ```

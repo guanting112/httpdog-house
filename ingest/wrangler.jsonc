@@ -29,7 +29,7 @@
     // How far X-Httpdog-Timestamp may be from this Worker's clock, in seconds
     "MAX_SKEW_SECS": "300",
     // Alerts older than this many days are deleted by the daily run below. "0" keeps them forever
-    "RETENTION_DAYS": "400"
+    "RETENTION_DAYS": "365"
   },
 
   // Once a day: delete alerts past RETENTION_DAYS, expired sessions and old rejections
