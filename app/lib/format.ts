@@ -48,7 +48,9 @@ const NAMED: Record<string, string> = { '\n': '\\n', '\r': '\\r', '\t': '\\t' }
  * could make an alert read as something it is not, so each is shown as an escape instead.
  */
 export function printable(text: string): string {
-  return text.replace(/[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/g, (char) => {
+  // C0, DEL, C1, then every mark Unicode lists as Bidi_Control: ALM, LRM, RLM, the embeddings and
+  // overrides, the isolates. Written as escapes: typed as they are, they would be invisible here too
+  return text.replace(/[\u0000-\u001f\u007f-\u009f؜‎‏‪-‮⁦-⁩]/g, (char) => {
     const code = char.charCodeAt(0)
     return NAMED[char] ?? (code < 0x100 ? `\\x${code.toString(16).padStart(2, '0')}` : `\\u${code.toString(16).padStart(4, '0')}`)
   })

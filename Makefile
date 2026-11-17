@@ -104,7 +104,9 @@ preview: build ## Build the UI, then run it the way Cloudflare will (http://loca
 
 ##@ Checks
 
-.PHONY: typecheck test check audit build dry-run
+FUZZ_RUNS ?= 20000
+
+.PHONY: typecheck test check fuzz audit build dry-run
 typecheck: ## Type-check the app, its API and the ingest Worker
 	$(BUN) run typecheck
 
@@ -112,6 +114,11 @@ test: ## Unit tests: signatures, encryption, passwords, patterns, the ingest Wor
 	$(BUN) test
 
 check: typecheck test ## Everything above; run it before a deploy
+
+# `make test` already runs test/fuzz.test.ts with 200 inputs per property. This looks much longer.
+# A failure prints a seed: FUZZ_SEED=<seed> make fuzz runs exactly that again
+fuzz: ## Fuzz for longer: FUZZ_RUNS inputs per property (default 20000)
+	FUZZ_RUNS=$(FUZZ_RUNS) $(BUN) test test/fuzz.test.ts --timeout 3600000
 
 audit: ## Look for known vulnerabilities in the packages (build tools included; they are not deployed)
 	$(BUN) audit

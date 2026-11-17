@@ -39,8 +39,10 @@ export class SetupError extends Error {}
 
 /** The file's text with KEY set to value: in place where the line exists, added at the end where it does not */
 export function setEnvValue(text: string, key: string, value: string): string {
-  const line = new RegExp(`^${key}=.*$`, 'm')
-  if (line.test(text)) return text.replace(line, `${key}=${value}`)
+  // A line ends at \n and nowhere else, as parseEnv reads it. Every line for the key is set, since
+  // the last one is the one that counts. The replacement is a function so that a $ in a value stays a $
+  const line = new RegExp(`^${key}=[^\\n]*$`, 'gm')
+  if (text.search(line) >= 0) return text.replace(line, () => `${key}=${value}`)
   return `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${key}=${value}\n`
 }
 

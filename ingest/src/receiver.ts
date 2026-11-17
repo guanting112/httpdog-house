@@ -220,8 +220,11 @@ function textOrNull(value: unknown, max: number): string | null {
   return typeof value === 'string' ? text(value, max) : null
 }
 
+/** A whole number the database keeps as one and a page can show; 1e300 is a number too, and is neither */
 function intOrNull(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : null
+  if (typeof value !== 'number') return null
+  const whole = Math.trunc(value)
+  return Number.isSafeInteger(whole) ? whole : null
 }
 
 async function store(env: Env, parsed: Parsed, keyId: number, now: number, sentAt: number, bodyHash: string): Promise<void> {

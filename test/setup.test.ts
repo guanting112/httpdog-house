@@ -67,6 +67,13 @@ describe('what setup reads', () => {
     expect(parseEnv(setEnvValue(EXAMPLE, 'DATABASE_ID', ID)).DATABASE_ID).toBe(ID)
   })
 
+  // Found by test/fuzz.test.ts
+  test('a value is written as it is, over the whole line, on every line for the key', () => {
+    expect(setEnvValue('INGEST_URL=old\n', 'INGEST_URL', "https://h.example.com/alerts?a=$&b=$'")).toBe("INGEST_URL=https://h.example.com/alerts?a=$&b=$'\n")
+    expect(setEnvValue('INGEST_URL=old\rstill the same line\nUI_DOMAIN=\n', 'INGEST_URL', 'new')).toBe('INGEST_URL=new\nUI_DOMAIN=\n')
+    expect(parseEnv(setEnvValue('DATABASE_ID=\n# again, by hand\nDATABASE_ID=\n', 'DATABASE_ID', ID)).DATABASE_ID).toBe(ID)
+  })
+
   test('the database is found by its exact name', () => {
     const list = JSON.stringify([
       { uuid: 'other', name: 'httpdog-house-team-a' },

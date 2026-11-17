@@ -180,6 +180,15 @@ describe('a signed alert', () => {
     expect((await send(body)).status).toBe(204)
     expect(db.sqlite.query('SELECT version, hits, kind, body FROM alerts').get()).toEqual({ version: 2, hits: null, kind: 'digest', body })
   })
+
+  // Found by test/fuzz.test.ts: these were stored as they came, as numbers no page can show
+  test('with numbers too large to be whole is stored without them', async () => {
+    const sentAt = now() - 5
+    const body = alertBody({ timestamp: 1e300, hits: 9007199254740993, window_secs: -1e21, dropped: 2.9 })
+    expect((await send(body, { timestamp: sentAt })).status).toBe(204)
+    // the time falls back to when the request says it was sent
+    expect(db.sqlite.query('SELECT fired_at, hits, window_secs, dropped, body FROM alerts').get()).toEqual({ fired_at: sentAt, hits: null, window_secs: null, dropped: 2, body })
+  })
 })
 
 describe('two keys for one instance', () => {

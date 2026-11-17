@@ -47,7 +47,7 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 | `scripts/` | `setup.ts` (the first deployment), `deploy-config.ts` (writes the configs to deploy from), `create-admin.ts` and `send-test-alert.ts` |
 | `deploy.local.env.example` | What differs from one deployment to the next. Your copy, `deploy.local.env`, is not committed |
 | `docs/` | Deploying, how it works, and this file, each in English and Traditional Chinese |
-| `test/` | Unit tests. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
+| `test/` | Unit tests, and `fuzz.test.ts`, which tries generated inputs against what takes input from outside. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
 | `wrangler.jsonc` | The UI's Worker, with example values. `nuxt build` merges it into `.output/server/wrangler.json` |
 
 Notes for whoever edits it:
@@ -64,9 +64,10 @@ Notes for whoever edits it:
 
 ## What has been checked
 
-- `make check`: type checks, and 59 unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, the receiver against the real schema (accepted, repeated, refused for each reason, and the daily clean-up), the configs generated from `deploy.local.env`, and the steps of `make setup` against an account that exists only in the test.
+- `make check`: type checks, and 79 tests. 62 are unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, the receiver against the real schema (accepted, repeated, refused for each reason, and the daily clean-up), the configs generated from `deploy.local.env`, and the steps of `make setup` against an account that exists only in the test.
 - With invented `deploy.*.env` files, one of them with a `NAME_SUFFIX`, `wrangler deploy --dry-run` accepted the generated configs of both Workers.
 - `make setup` end to end with stand-ins for wrangler and make that touch nothing: a first run, a second run that finds everything in place, and a run with no terminal to ask on.
+- Fuzzing: the other 17 tests are properties in `test/fuzz.test.ts`, each tried with 200 generated inputs in `make check` and with 20,000 in `make fuzz`. They cover the receiver (nothing unsigned is stored and nothing is answered with an error; a signed alert is stored once whatever its fields hold; a body changed after signing and an instance no key lists are refused), signatures, the encryption of stored secrets, instance patterns, the text and highlighting of what is shown on a page, and `deploy.local.env`. The first runs found three things, since fixed: U+061C, a mark that reverses text, was shown as it was; a number such as `1e300` in a signed alert was stored as a time; and a value written to `deploy.local.env` could be changed on the way by a `$` in it or a `\r` in the line it replaced.
 - On one machine (macOS, wrangler 4.163.0), with both Workers running in wrangler's local runtime: the real `httpdog` binary replaying `sample.log` delivered its 3 signed alerts, and with a wrong secret all 9 attempts were refused and recorded.
 - In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of a new alert, filters, creating, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer being kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
 - **Not checked: anything on Cloudflare itself.** Nothing has been deployed, so `make setup` against a real account, the real D1, the rate limiter, the daily timer and the CPU limit of the free plan are untested.

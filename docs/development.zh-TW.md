@@ -47,7 +47,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 | `scripts/` | `setup.ts`(第一次部署)、`deploy-config.ts`(產生部署用的設定檔)、`create-admin.ts` 與 `send-test-alert.ts` |
 | `deploy.local.env.example` | 每一套部署不一樣的值。你自己的那份 `deploy.local.env` 不會進版本控制 |
 | `docs/` | 部署、運作方式,以及這份文件,各有英文與繁體中文兩個版本 |
-| `test/` | 單元測試。`d1.ts` 用記憶體內的 SQLite 加上真的資料表結構來代替 D1 |
+| `test/` | 單元測試,以及 `fuzz.test.ts`:用產生出來的輸入去試所有接受外部輸入的地方。`d1.ts` 用記憶體內的 SQLite 加上真的資料表結構來代替 D1 |
 | `wrangler.jsonc` | 介面的 Worker,裡面是範例值。`nuxt build` 會把它合併到 `.output/server/wrangler.json` |
 
 給修改這個專案的人:
@@ -64,9 +64,10 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 
 ## 驗證過的範圍
 
-- `make check`:型別檢查,以及 59 個單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),從 `deploy.local.env` 產生的設定檔,以及 `make setup` 的每一步(對象是只存在於測試裡的帳號)。
+- `make check`:型別檢查,以及 79 個測試。其中 62 個是單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),從 `deploy.local.env` 產生的設定檔,以及 `make setup` 的每一步(對象是只存在於測試裡的帳號)。
 - 用幾份虛構的 `deploy.*.env`(其中一份有 `NAME_SUFFIX`),`wrangler deploy --dry-run` 接受了兩個 Worker 產生出來的設定檔。
 - 用不會動到任何東西的假 wrangler 與假 make,把 `make setup` 從頭跑到尾:第一次執行、第二次執行(發現一切都已就緒),以及沒有終端機可以詢問的情況。
+- Fuzzing:另外 17 個測試是 `test/fuzz.test.ts` 裡的性質,在 `make check` 中每個用 200 組產生出來的輸入去試,在 `make fuzz` 中則是 20,000 組。涵蓋接收端(沒有簽章的請求不會被存下來,也不會得到錯誤回應;已簽章的告警不論欄位裡放什麼都只存一次;簽章後被改過的內容、沒有金鑰登記的 instance 都會被拒絕)、簽章、secret 的加密、instance 樣式、頁面上顯示的文字與語法上色,以及 `deploy.local.env`。最初幾次執行找到三個問題,都已修正:會反轉文字方向的 U+061C 原本會照原樣顯示;已簽章的告警裡像 `1e300` 這樣的數字原本會被當成時間存下來;寫進 `deploy.local.env` 的值,原本可能因為值裡的 `$` 或被取代那一行裡的 `\r` 而走樣。
 - 在一台機器上(macOS、wrangler 4.163.0),兩個 Worker 都跑在 wrangler 的本機執行環境裡:真的 `httpdog` 執行檔重播 `sample.log`,3 則已簽章的告警都送達;改用錯的 secret 時,9 次嘗試全部被拒絕並留下紀錄。
 - 用 headless Chrome 對 build 後的介面測試,HTTP 與 HTTPS 都跑過:登入、新告警即時出現、篩選、金鑰的建立、編輯、停用與刪除(每一步之後都檢查接收端的回應)、viewer 被擋在管理頁面與管理 API 之外、變更密碼,以及兩種語言、兩種主題在桌機與手機寬度下的頁面。
 - **沒有驗證:Cloudflare 上的任何東西。** 還沒有部署過,所以對真實帳號執行 `make setup`、真正的 D1、速率限制、每日排程,以及免費方案的 CPU 上限都沒有測過。
