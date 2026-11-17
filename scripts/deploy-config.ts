@@ -12,7 +12,8 @@
 // own with a NAME_SUFFIX, which names its two Workers and its database apart from the first's;
 // DEPLOY_ENV in the environment says which file to read (the Makefile passes it on).
 //
-// The Makefile runs these; nothing here uploads anything.
+// The Makefile runs these; nothing here uploads anything. scripts/setup.ts fills in the file on a
+// first deployment.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -20,13 +21,15 @@ import { resolve } from 'node:path'
 /** The database_id both committed configs ship with */
 export const PLACEHOLDER = '00000000-0000-0000-0000-000000000000'
 
-const ROOT = resolve(import.meta.dir, '..')
-const LOCAL = process.env.DEPLOY_ENV || 'deploy.local.env'
+export const ROOT = resolve(import.meta.dir, '..')
+/** The file of the deployment in hand */
+export const LOCAL = process.env.DEPLOY_ENV || 'deploy.local.env'
+export const LOCAL_EXAMPLE = 'deploy.local.env.example'
 const UI_TEMPLATE = 'wrangler.jsonc'
 const INGEST_TEMPLATE = 'ingest/wrangler.jsonc'
 /** Each next to its template, so the paths inside (src/index.ts, ../migrations) mean the same */
-const UI_DEPLOY = 'wrangler.deploy.json'
-const INGEST_DEPLOY = 'ingest/wrangler.deploy.json'
+export const UI_DEPLOY = 'wrangler.deploy.json'
+export const INGEST_DEPLOY = 'ingest/wrangler.deploy.json'
 /** What `nuxt build` generates from wrangler.jsonc, and what `wrangler deploy` uploads the UI from */
 const UI_BUILT = '.output/server/wrangler.json'
 
@@ -70,7 +73,7 @@ const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 /** Short enough that the longer Worker name still fits in a workers.dev hostname label (63) */
 const SUFFIX = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/
 
-/** NAME_SUFFIX, checked. Read on its own before the database exists (`make db-create`) */
+/** NAME_SUFFIX, checked. Read on its own before the database exists (scripts/setup.ts) */
 export function readSuffix(env: Record<string, string>): string | undefined {
   const suffix = env.NAME_SUFFIX || undefined
   if (suffix && !SUFFIX.test(suffix)) throw new Error(`NAME_SUFFIX in ${LOCAL} is 1 to 32 of a-z, 0-9 and dash, not starting or ending with a dash`)
@@ -95,7 +98,7 @@ const HOSTNAME = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[
 export function readValues(env: Record<string, string>): DeployValues {
   const suffix = readSuffix(env)
   const databaseId = env.DATABASE_ID ?? ''
-  if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${LOCAL}; \`make db-create\` prints it`)
+  if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${LOCAL}. For a first deployment, run \`make setup\`: it creates the database and fills it in`)
   if (!UUID.test(databaseId)) throw new Error(`DATABASE_ID in ${LOCAL} does not look like a D1 database id`)
 
   const domain = (name: 'UI_DOMAIN' | 'INGEST_DOMAIN') => {
@@ -159,18 +162,22 @@ function readLocal(): Record<string, string> {
   return parseEnv(readFileSync(resolve(ROOT, LOCAL), 'utf8'))
 }
 
+/** The name a deployment's database is created with: the committed one, plus the suffix */
+export function databaseName(suffix: string | undefined): string {
+  return withSuffix(readTemplate(UI_TEMPLATE).d1_databases?.[0]?.database_name, suffix) ?? ''
+}
+
 function check(): DeployValues {
   for (const path of [UI_TEMPLATE, INGEST_TEMPLATE]) {
     const found = leak(readTemplate(path))
     if (found) throw new Error(`${path} has ${found}. That file is committed: move the value to ${LOCAL} and put the example back`)
   }
-  if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing: copy deploy.local.env.example to it and fill in DATABASE_ID (\`make db-create\` writes the copy)`)
+  if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing. For a first deployment, run \`make setup\`: it writes the file and fills it in`)
   return readValues(readLocal())
 }
 
 function write(path: string, config: WranglerConfig) {
   writeFileSync(resolve(ROOT, path), JSON.stringify(config, null, 2) + '\n')
-  console.log(`wrote ${path}`)
 }
 
 if (import.meta.main) {
@@ -188,8 +195,7 @@ if (import.meta.main) {
       write(UI_DEPLOY, ui)
       write(INGEST_DEPLOY, ingest)
     } else if (command === 'database-name') {
-      const suffix = existsSync(resolve(ROOT, LOCAL)) ? readSuffix(readLocal()) : undefined
-      console.log(withSuffix(readTemplate(UI_TEMPLATE).d1_databases?.[0]?.database_name, suffix))
+      console.log(databaseName(existsSync(resolve(ROOT, LOCAL)) ? readSuffix(readLocal()) : undefined))
     } else if (command === 'ui') {
       const values = check()
       if (!existsSync(resolve(ROOT, UI_BUILT))) throw new Error(`${UI_BUILT} is missing: build the UI first (make deploy-ui does both)`)
