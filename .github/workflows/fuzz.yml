@@ -1,0 +1,35 @@
+# Fuzzes what takes input from outside with fast-check: the receiver, signatures, the encryption of
+# stored secrets, instance patterns and the text shown on a page; see test/fuzz.test.ts for what is
+# checked. `make check` already tries each property with 200 inputs. A push or pull request tries
+# 5,000, which takes seconds; the weekly run goes on for longer.
+name: fuzz
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "45 4 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-24.04
+    env:
+      # Inputs per property
+      FUZZ_RUNS: ${{ github.event_name == 'schedule' && '300000' || '5000' }}
+    steps:
+      # Actions are always pinned to a commit SHA: a tag can be moved, a SHA cannot
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: make install
+      # A failure prints the input, shrunk, and a seed: FUZZ_SEED=<seed> make fuzz runs it again
+      - name: Fuzz every property
+        run: make fuzz FUZZ_RUNS="$FUZZ_RUNS"

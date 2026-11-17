@@ -86,3 +86,9 @@ notifiers:
 | [docs/deploying.zh-TW.md](docs/deploying.zh-TW.md) | `make setup` 做了什麼、自訂網域、多套部署、設定、Cloudflare 的限制 |
 | [docs/how-it-works.zh-TW.md](docs/how-it-works.zh-TW.md) | 為什麼分成兩個 Worker、簽章金鑰的細節、接收端的回應、儲存的內容、安全性 |
 | [docs/development.zh-TW.md](docs/development.zh-TW.md) | 在本機執行、檔案位置、驗證過的範圍 |
+
+## 安全性與授權
+
+發現漏洞的話,請依照 [SECURITY.md](SECURITY.md) 的說明私下回報,不要開公開的 issue。
+
+以 [MIT License](LICENSE) 釋出。

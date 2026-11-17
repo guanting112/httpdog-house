@@ -1,0 +1,28 @@
+# Dependabot opens pull requests for new versions of the packages in bun.lock and of the actions
+# in .github/workflows, updating their SHA pins and comments.
+#
+# wrangler is one of those packages, and scripts/setup.ts relies on how it behaves (see the notes
+# in docs/development.md). A pull request that updates it needs more than a green check.
+version: 2
+updates:
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    # A new version is proposed only after it has been out for a week, so one
+    # that is pulled for being malicious or broken does not reach a deployment.
+    cooldown:
+      default-days: 7
+    groups:
+      packages:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1,0 +1,35 @@
+# CodeQL static analysis of the TypeScript and Vue code and of the workflows themselves. Results
+# appear under Security, Code scanning, and count toward Scorecard's SAST check.
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so new CodeQL queries also cover code that has not changed.
+    - cron: "30 3 * * 2"
+
+permissions: {}
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    # Code scanning is only available to public repositories on this plan,
+    # so the job is skipped while the repository is private.
+    if: ${{ !github.event.repository.private }}
+    permissions:
+      contents: read
+      security-events: write # upload results to code scanning
+    steps:
+      # Pinned to commit SHAs, like check.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Neither language needs a build: CodeQL reads the sources and the workflow files directly.
+      - uses: github/codeql-action/init@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
+        with:
+          languages: actions, javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2

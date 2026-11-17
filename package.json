@@ -2,6 +2,7 @@
   "name": "httpdog-house",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "nuxt dev",
     "dev:ingest": "wrangler dev -c ingest/wrangler.jsonc --port 8788 --persist-to .wrangler/state",

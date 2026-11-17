@@ -86,3 +86,9 @@ If httpdog logs `webhook attempt N failed` with a 401, open **rejected**: it lis
 | [docs/deploying.md](docs/deploying.md) | What `make setup` does, your own hostnames, several deployments, settings, Cloudflare's limits |
 | [docs/how-it-works.md](docs/how-it-works.md) | Why two Workers, signing keys in detail, what the receiver answers, what is stored, security |
 | [docs/development.md](docs/development.md) | Running it on your machine, where things are, what has been checked |
+
+## Security and license
+
+Found a vulnerability? Please report it privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
+
+Released under the [MIT License](LICENSE).

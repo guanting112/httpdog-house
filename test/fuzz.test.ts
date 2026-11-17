@@ -10,7 +10,7 @@
 // signature and encryption helpers under it, instance patterns, and the text of access logs on its
 // way to a page.
 
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import fc from 'fast-check'
 import { highlight, type Lang } from '../app/lib/highlight'
 import { printable } from '../app/lib/format'
@@ -213,9 +213,15 @@ describe('fuzz: receiver', () => {
 
   const now = () => Math.floor(Date.now() / 1000)
 
+  // One database is open at a time: a long run makes over a million of them
+  let open: { close(): void } | undefined
+  afterAll(() => open?.close())
+
   /** A receiver with an empty database and one key, for web-* and db-01 */
   function receiver() {
+    open?.close()
     const db = createTestDb()
+    open = db.sqlite
     const env: Env = { DB: db.d1, SECRETS_KEY }
     const pending: Promise<unknown>[] = []
     const ctx = { waitUntil: (promise: Promise<unknown>) => void pending.push(promise), passThroughOnException: () => {} } as unknown as ExecutionContext
