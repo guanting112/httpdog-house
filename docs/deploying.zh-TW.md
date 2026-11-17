@@ -8,7 +8,7 @@
 
 | 步驟 | 做了什麼 |
 |---|---|
-| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器 |
+| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
 | 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它 |
 | 3. 資料表 | 套用 `migrations/`。wrangler 會先問你要不要繼續 |
 | 4. 接收端 | 上傳 ingest Worker,並把它的網址記在 `deploy.local.env` |

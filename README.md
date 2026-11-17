@@ -31,7 +31,7 @@ make setup
 
 `make setup` is the whole first deployment:
 
-1. logs in to Cloudflare (your browser opens),
+1. logs in to Cloudflare if you are not logged in (your browser opens), shows which account it is about to use, and goes on only when you say yes,
 2. creates the database and its tables,
 3. uploads the receiver and the UI,
 4. gives both the key that encrypts stored secrets, which is kept nowhere else,

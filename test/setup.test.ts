@@ -18,6 +18,12 @@ function account(start: {
   signingKeys?: number
   failing?: string
   noTerminal?: boolean
+  /** The accounts the login can reach. One, unless a test says otherwise */
+  accounts?: { name: string; id: string }[]
+  /** CLOUDFLARE_ACCOUNT_ID of the environment */
+  accountId?: string
+  /** What is typed when asked whether this is the account. Yes, unless a test says otherwise */
+  confirm?: string
 }) {
   const state = {
     files: { [LOCAL_EXAMPLE]: EXAMPLE, ...(start.file === undefined ? {} : { [LOCAL]: start.file }) } as Record<string, string>,
@@ -27,8 +33,12 @@ function account(start: {
     admins: start.admins ?? 0,
     ran: [] as string[],
     said: [] as string[],
+    /** How many times a username was asked for */
     asked: 0,
+    /** The questions about the account, as they were put */
+    confirmations: [] as string[],
   }
+  const login = { loggedIn: true, email: 'someone@example.com', accounts: start.accounts ?? [{ name: "Someone's Account", id: 'a'.repeat(32) }] }
   const shell: Shell = {
     async run(command) {
       const line = command.join(' ')
@@ -45,14 +55,22 @@ function account(start: {
     async capture(command) {
       const line = command.join(' ')
       const ok = (stdout: string) => ({ code: 0, stdout, stderr: '' })
-      if (line === 'bunx wrangler whoami --json') return state.loggedIn ? ok('{"loggedIn":true}') : { code: 1, stdout: '{"loggedIn":false}', stderr: '' }
+      if (line === 'bunx wrangler whoami --json') return state.loggedIn ? ok(JSON.stringify(login)) : { code: 1, stdout: '{"loggedIn":false}', stderr: '' }
       if (line === 'bunx wrangler d1 list --json') return ok(JSON.stringify(state.databases))
       if (line.startsWith('bunx wrangler secret list -c ')) return ok(state.keyOn.includes(command[5]!) ? '[{"name":"SECRETS_KEY","type":"secret_text"}]' : '[]')
       if (line.includes('FROM signing_keys')) return ok(JSON.stringify([{ results: [{ n: start.signingKeys ?? 0 }], success: true }]))
       if (line.includes('FROM users')) return ok(JSON.stringify([{ results: [{ n: state.admins }], success: true }]))
       throw new Error(`a command the test did not expect: ${line}`)
     },
-    ask: () => (start.noTerminal ? null : (['Not A Name', 'guanting'][state.asked++] ?? 'guanting')),
+    ask(question) {
+      if (start.noTerminal) return null
+      if (question.includes('Set up httpdog-house in')) {
+        state.confirmations.push(question)
+        return start.confirm ?? 'y'
+      }
+      return ['Not A Name', 'guanting'][state.asked++] ?? 'guanting'
+    },
+    accountId: start.accountId,
     log: (line) => void state.said.push(line),
     read: (path) => state.files[path] ?? null,
     write: (path, text) => void (state.files[path] = text),
@@ -158,10 +176,41 @@ describe('make setup', () => {
     expect(parseEnv(state.files[LOCAL]!).DATABASE_ID).toBe(ID)
   })
 
-  test('with no terminal to ask on, it stops at the admin and says how to make one', async () => {
+  test('it says who is logged in and which account, and waits for a yes', async () => {
+    const { state, shell } = account({})
+    await setup(shell)
+    expect(state.confirmations).toEqual([`Logged in as someone@example.com. Set up httpdog-house in "Someone's Account"? (y/n): `])
+  })
+
+  test('anything but a yes stops it before a command is run or a file is written', async () => {
+    for (const confirm of ['n', '', 'no', 'maybe']) {
+      const { state, shell } = account({ confirm })
+      await expect(setup(shell)).rejects.toThrow('Stopped before changing anything')
+      expect(state.ran).toEqual([])
+      expect(state.files[LOCAL]).toBeUndefined()
+    }
+  })
+
+  test('with no terminal to confirm on, it does nothing', async () => {
     const { state, shell } = account({ noTerminal: true })
-    await expect(setup(shell)).rejects.toThrow('make admin NAME=you')
-    expect(state.ran.at(-1)).toBe('make --no-print-directory secrets')
+    await expect(setup(shell)).rejects.toThrow('no terminal to confirm the account on')
+    expect(state.ran).toEqual([])
+    expect(state.files[LOCAL]).toBeUndefined()
+  })
+
+  test('a login that reaches several accounts has to say which one', async () => {
+    const accounts = [
+      { name: 'Personal', id: 'a'.repeat(32) },
+      { name: 'Work', id: 'b'.repeat(32) },
+    ]
+    const unsaid = account({ accounts })
+    await expect(setup(unsaid.shell)).rejects.toThrow(`CLOUDFLARE_ACCOUNT_ID=<id> make setup`)
+    expect(unsaid.state.ran).toEqual([])
+    expect(unsaid.state.confirmations).toEqual([])
+
+    const said = account({ accounts, accountId: 'b'.repeat(32) })
+    await setup(said.shell)
+    expect(said.state.confirmations).toEqual([`Logged in as someone@example.com. Set up httpdog-house in "Work"? (y/n): `])
   })
 
   test('a key on one Worker only is replaced while nothing was encrypted with it', async () => {

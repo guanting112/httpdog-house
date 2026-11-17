@@ -8,7 +8,7 @@ It was built for Cloudflare from the start: two Workers and one D1 database, in 
 
 | Step | What happens |
 |---|---|
-| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser |
+| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in and which account that is, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup` |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
 | 4. Receiver | Uploads the ingest Worker and notes its address in `deploy.local.env` |

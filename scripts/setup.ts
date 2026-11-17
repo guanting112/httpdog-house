@@ -1,7 +1,8 @@
 // A whole first deployment in one command (`make setup`), and safe to run again: every step looks
 // at what is already there and does only what is missing.
 //
-//   1. log in to Cloudflare, if this machine is not logged in
+//   1. log in to Cloudflare if this machine is not logged in, then say which account that is and
+//      go on only after a yes
 //   2. create the D1 database and note its id in deploy.local.env
 //   3. create the tables
 //   4. upload the receiver, and note its address in deploy.local.env
@@ -27,6 +28,8 @@ export interface Shell {
   run(command: string[]): Promise<{ code: number; output: string }>
   /** Runs a command without showing it and returns what it printed */
   capture(command: string[]): Promise<{ code: number; stdout: string; stderr: string }>
+  /** CLOUDFLARE_ACCOUNT_ID of the environment: the account wrangler uses when the login reaches several */
+  accountId?: string
   /** The answer typed on the terminal, or null when there is no terminal to type on */
   ask(question: string): string | null
   log(line: string): void
@@ -84,6 +87,23 @@ export function readCount(executeJson: string): number | undefined {
   }
 }
 
+export interface Login {
+  email: string
+  accounts: { name: string; id: string }[]
+}
+
+/** Who is logged in and which accounts they can reach, from what `wrangler whoami --json` printed */
+export function readLogin(whoamiJson: string): Login | undefined {
+  try {
+    const who = JSON.parse(whoamiJson) as { loggedIn?: boolean; email?: unknown; accounts?: unknown }
+    if (who.loggedIn !== true || !Array.isArray(who.accounts)) return undefined
+    const accounts = (who.accounts as { name?: unknown; id?: unknown }[]).flatMap(({ name, id }) => (typeof name === 'string' && typeof id === 'string' ? [{ name, id }] : []))
+    return { email: typeof who.email === 'string' ? who.email : 'an API token', accounts }
+  } catch {
+    return undefined
+  }
+}
+
 export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: string }> {
   let step = 0
   const say = (title: string) => shell.log(`\n[${++step}/7] ${title}`)
@@ -100,7 +120,38 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
   }
   const again = 'Nothing is lost: run `make setup` again once that is sorted out, and it carries on from here.'
 
-  // The file of this deployment. Everything below reads it again after writing to it
+  // Which account, said out loud and agreed to before anything is created in it. "Already logged
+  // in" is not an answer: a machine may be logged in to an account from another day's work
+  say('Cloudflare account')
+  const whoami = async () => {
+    const result = await shell.capture([...WRANGLER, 'whoami', '--json'])
+    return result.code === 0 ? readLogin(result.stdout) : undefined
+  }
+  let login = await whoami()
+  if (!login) {
+    await must([...WRANGLER, 'login'], 'Logging in to Cloudflare did not finish.')
+    login = await whoami()
+    if (!login) throw new SetupError('Could not read who is logged in to Cloudflare. `make whoami` shows what wrangler says.')
+  }
+  // A login that reaches several accounts does not say which one wrangler will use. It takes
+  // CLOUDFLARE_ACCOUNT_ID, so that is asked for rather than guessed
+  let target = login.accounts[0]
+  if (login.accounts.length > 1) {
+    target = login.accounts.find(({ id }) => id === shell.accountId)
+    if (!target) {
+      const list = login.accounts.map(({ name, id }) => `  ${id}  ${name}`).join('\n')
+      throw new SetupError(`${login.email} can reach more than one Cloudflare account:\n${list}\nSay which one to use: CLOUDFLARE_ACCOUNT_ID=<id> make setup`)
+    }
+  }
+  if (!target) throw new SetupError(`${login.email} has no Cloudflare account to deploy to.`)
+  const answer = shell.ask(`Logged in as ${login.email}. Set up httpdog-house in "${target.name}"? (y/n): `)
+  if (answer === null) throw new SetupError('There is no terminal to confirm the account on, so nothing was done. Run `make setup` in a terminal.')
+  if (!/^y(es)?$/i.test(answer.trim())) {
+    throw new SetupError('Stopped before changing anything. To use another login: `bunx wrangler logout`, then `make setup` again.')
+  }
+
+  // The file of this deployment, written only once the account is agreed to. Everything below
+  // reads it again after writing to it
   if (shell.read(LOCAL) === null) {
     const example = shell.read(LOCAL_EXAMPLE)
     if (example === null) throw new SetupError(`${LOCAL_EXAMPLE} is missing; is this a complete checkout?`)
@@ -109,13 +160,6 @@ export async function setup(shell: Shell): Promise<{ ui?: string; receiver?: str
   }
   const values = () => parseEnv(shell.read(LOCAL) ?? '')
   const set = (key: string, value: string) => shell.write(LOCAL, setEnvValue(shell.read(LOCAL) ?? '', key, value))
-
-  say('Cloudflare account')
-  if ((await shell.capture([...WRANGLER, 'whoami', '--json'])).code === 0) {
-    shell.log('already logged in')
-  } else {
-    await must([...WRANGLER, 'login'], 'Logging in to Cloudflare did not finish.')
-  }
 
   say('Database')
   if (values().DATABASE_ID) {
@@ -223,6 +267,7 @@ function terminal(): Shell {
       return { code: await child.exited, stdout, stderr }
     },
     ask: (question) => (process.stdin.isTTY ? prompt(question) : null),
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID || undefined,
     log: (line) => console.log(line),
     read: (path) => (existsSync(resolve(ROOT, path)) ? readFileSync(resolve(ROOT, path), 'utf8') : null),
     write: (path, text) => writeFileSync(resolve(ROOT, path), text),
