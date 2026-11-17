@@ -92,6 +92,23 @@ describe('generated configs', () => {
     expect(result).toEqual({ ...before, d1_databases: [{ ...before.d1_databases![0], database_id: ID }] })
   })
 
+  test('the receiver gets its settings, and keeps its defaults for those left empty', () => {
+    const ingestVars = (env: Record<string, string>) => applyValues(template('ingest/wrangler.jsonc'), readValues({ DATABASE_ID: ID, ...env }), 'ingest').vars
+    expect(ingestVars({ RETENTION_DAYS: '', MAX_SKEW_SECS: '' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '400' })
+    expect(ingestVars({ RETENTION_DAYS: '30' })).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '30' })
+    expect(ingestVars({ RETENTION_DAYS: '0', MAX_SKEW_SECS: '0600' })).toEqual({ MAX_SKEW_SECS: '600', RETENTION_DAYS: '0' })
+    // they are the receiver's alone
+    expect(applyValues(template('wrangler.jsonc'), readValues({ DATABASE_ID: ID, RETENTION_DAYS: '30' }), 'ui').vars).toEqual(template('wrangler.jsonc').vars)
+  })
+
+  test('a setting that is not a whole number stops the deploy, since the receiver would quietly use its default', () => {
+    for (const bad of ['30d', '-1', '1.5', 'forever', '1e3']) {
+      expect(() => readValues({ DATABASE_ID: ID, RETENTION_DAYS: bad })).toThrow('RETENTION_DAYS')
+    }
+    expect(() => readValues({ DATABASE_ID: ID, MAX_SKEW_SECS: '0' })).toThrow('MAX_SKEW_SECS')
+    expect(() => readValues({ DATABASE_ID: ID, MAX_SKEW_SECS: '5m' })).toThrow('MAX_SKEW_SECS')
+  })
+
   test('each Worker gets its own hostname, and only the UI gets INGEST_URL', () => {
     const values = { databaseId: ID, ingestUrl: 'https://hook.example.com/alerts', uiDomain: 'alerts.example.com', ingestDomain: 'hook.example.com' }
 
@@ -103,7 +120,7 @@ describe('generated configs', () => {
 
     const ingest = applyValues(template('ingest/wrangler.jsonc'), values, 'ingest')
     expect(ingest.d1_databases![0]!.database_id).toBe(ID)
-    expect(ingest.vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '90' })
+    expect(ingest.vars).toEqual({ MAX_SKEW_SECS: '300', RETENTION_DAYS: '400' })
     expect(ingest.routes).toEqual([{ pattern: 'hook.example.com', custom_domain: true }])
   })
 })

@@ -306,8 +306,11 @@ describe('the daily clean-up', () => {
     await send(alertBody({ group: 'old' }))
     await send(alertBody({ group: 'new' }))
     await send(alertBody({ rule: 'gone', group: 'old' }))
-    const old = now() - 100 * 86400
+    await send(alertBody({ group: 'last season' }))
+    // the default is 400 days: 500 days ago is past it, 100 days ago is not
+    const old = now() - 500 * 86400
     db.sqlite.run(`UPDATE alerts SET received_at = ${old} WHERE group_value = 'old'`)
+    db.sqlite.run(`UPDATE alerts SET received_at = ${now() - 100 * 86400} WHERE group_value = 'last season'`)
     db.sqlite.run(`UPDATE alert_sources SET last_at = ${old} WHERE rule = 'gone'`)
     db.sqlite.run(`INSERT INTO alert_hours (hour, instance, rule, total) VALUES (${Math.floor(old / 3600)}, 'web-01', 'gone', 1)`)
     db.sqlite.run(`INSERT INTO users (username, password_hash, role, created_at) VALUES ('a', 'x', 'admin', 0)`)
@@ -316,7 +319,7 @@ describe('the daily clean-up', () => {
 
     await prune(env, now())
 
-    expect(db.sqlite.query('SELECT group_value FROM alerts').all()).toEqual([{ group_value: 'new' }])
+    expect(db.sqlite.query('SELECT group_value FROM alerts ORDER BY id').all()).toEqual([{ group_value: 'new' }, { group_value: 'last season' }])
     expect(db.sqlite.query('SELECT rule FROM alert_sources').all()).toEqual([{ rule: 'login-bruteforce' }])
     expect(count('alert_hours')).toBe(2)
     expect(db.sqlite.query('SELECT id FROM sessions').all()).toEqual([{ id: 'live' }])

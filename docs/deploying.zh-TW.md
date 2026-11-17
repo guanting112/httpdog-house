@@ -32,6 +32,7 @@
 | `INGEST_URL` | httpdog 要 POST 的網址,結尾是 `/alerts`。keys 頁面會顯示它。由 `make setup` 填入;設定了 `INGEST_DOMAIN` 時會跟著它 |
 | `UI_DOMAIN`、`INGEST_DOMAIN` | 你自己的網域,見下方 |
 | `NAME_SUFFIX` | 只有在同一個帳號放另一套部署時才需要,見下方 |
+| `RETENTION_DAYS`、`MAX_SKEW_SECS` | 接收端的設定,見下方 |
 
 Git 會忽略這個檔案。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`wrangler.deploy.json`、`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這些檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 fork 不帶任何人的部署資料,你也可以從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
 
@@ -66,14 +67,22 @@ make deploy DEPLOY_ENV=deploy.team-a.env         # 之後更新時使用
 
 ## 接收端的設定
 
-設定在 `ingest/wrangler.jsonc`:
+這是 `deploy.local.env` 裡另外兩個值。留空就使用預設值。
 
-| 變數 | 預設值 | 意義 |
+| 值 | 預設值 | 意義 |
 |---|---|---|
-| `MAX_SKEW_SECS` | `300` | 請求的時間戳可以與接收端時鐘相差多少秒 |
-| `RETENTION_DAYS` | `90` | 超過這個天數的告警每天刪除一次。`0` 代表永久保留 |
+| `RETENTION_DAYS` | `400` | 告警保留幾天。超過的每天刪除一次。`0` 代表永久保留 |
+| `MAX_SKEW_SECS` | `300` | 請求的時間戳可以與接收端時鐘相差多少秒。超出範圍的請求會被拒絕 |
 
-在那裡修改之後,執行 `make deploy-ingest`。
+```
+RETENTION_DAYS=30
+```
+
+```bash
+make deploy-ingest
+```
+
+改短之後,下一次每日清理就會生效,把已經太舊的告警刪掉。每一套部署有自己的設定。填的不是整數時部署會停下來,這樣打錯字就不會被當成預設值。
 
 ## 一步一步來
 

@@ -76,7 +76,7 @@ notifiers:
 - **被拒絕的請求。** 接收端拒絕的請求都列在 **rejected** 頁面,並附上原因。
 - **使用者。** admin 管理金鑰與使用者,viewer 只能看。帳號在 **users** 頁面建立。
 - **進不去。** `make admin NAME=you` 可以替帳號設定新密碼。
-- **告警保留多久。** 90 天,除非 `ingest/wrangler.jsonc` 裡的 `RETENTION_DAYS` 另有設定。
+- **告警保留多久。** 400 天。要更改的話,在 `deploy.local.env` 設定 `RETENTION_DAYS` 再執行 `make deploy-ingest`;`0` 代表永久保留。
 - **Log。** `make tail-ingest` 與 `make tail-ui` 可以即時看兩個 Worker 的 log。
 
 ## 更多說明

@@ -383,7 +383,7 @@ describe('fuzz: text shown on a page', () => {
 // ---------------------------------------------------------------- deploy.local.env
 
 describe('fuzz: deploy.local.env', () => {
-  const key = fc.constantFrom('DATABASE_ID', 'INGEST_URL', 'UI_DOMAIN', 'NAME_SUFFIX')
+  const key = fc.constantFrom('DATABASE_ID', 'INGEST_URL', 'UI_DOMAIN', 'NAME_SUFFIX', 'RETENTION_DAYS')
   // a value as setup writes one: a single line
   const value = messy.map((text) => text.replace(/\n/g, ''))
   const line = fc.oneof(fc.constant(''), messy.map((text) => `# ${text.replace(/\n/g, ' ')}`), fc.tuple(key, value).map(([k, v]) => `${k}=${v}`))

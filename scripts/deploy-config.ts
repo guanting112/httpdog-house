@@ -43,6 +43,9 @@ export interface DeployValues {
   ingestUrl?: string
   uiDomain?: string
   ingestDomain?: string
+  /** Settings of the receiver, as the whole numbers they are written as; undefined leaves the default of ingest/wrangler.jsonc */
+  retentionDays?: string
+  maxSkewSecs?: string
 }
 
 export interface WranglerConfig {
@@ -118,7 +121,19 @@ export function readValues(env: Record<string, string>): DeployValues {
   } else if (ingestDomain) {
     ingestUrl = `https://${ingestDomain}/alerts`
   }
-  return { databaseId, suffix, ingestUrl, uiDomain, ingestDomain }
+
+  // The receiver falls back to its default for a setting it cannot read, which would hide a typing
+  // mistake until alerts were deleted sooner or later than meant. So a mistake stops the deploy here
+  const wholeNumber = (name: 'RETENTION_DAYS' | 'MAX_SKEW_SECS', least: number, meaning: string) => {
+    const value = env[name]
+    if (!value) return undefined
+    if (!/^\d{1,9}$/.test(value) || Number(value) < least) throw new Error(`${name} in ${LOCAL} must be a whole number of ${least} or more: ${meaning}`)
+    return String(Number(value))
+  }
+  const retentionDays = wholeNumber('RETENTION_DAYS', 0, 'the days an alert is kept, or 0 to keep alerts forever')
+  const maxSkewSecs = wholeNumber('MAX_SKEW_SECS', 1, "the seconds a request's timestamp may be from the receiver's clock")
+
+  return { databaseId, suffix, ingestUrl, uiDomain, ingestDomain, retentionDays, maxSkewSecs }
 }
 
 /** A copy of a Worker's config with the values in place of the examples */
@@ -137,6 +152,13 @@ export function applyValues(config: WranglerConfig, values: DeployValues, worker
     result.ratelimits = config.ratelimits.map((limiter) => ({ ...limiter, namespace_id: limiterNamespace(limiter.namespace_id ?? '', suffix) }))
   }
   if (worker === 'ui' && values.ingestUrl) result.vars = { ...config.vars, INGEST_URL: values.ingestUrl }
+  if (worker === 'ingest' && (values.retentionDays || values.maxSkewSecs)) {
+    result.vars = {
+      ...config.vars,
+      ...(values.retentionDays ? { RETENTION_DAYS: values.retentionDays } : {}),
+      ...(values.maxSkewSecs ? { MAX_SKEW_SECS: values.maxSkewSecs } : {}),
+    }
+  }
   const hostname = worker === 'ui' ? values.uiDomain : values.ingestDomain
   if (hostname) {
     result.routes = [{ pattern: hostname, custom_domain: true }]

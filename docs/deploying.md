@@ -32,6 +32,7 @@ It is safe to run again. Each step looks at what is there and does only what is 
 | `INGEST_URL` | Where httpdog should POST, ending in `/alerts`. The keys page shows it. Filled in by `make setup`; follows `INGEST_DOMAIN` when that is set |
 | `UI_DOMAIN`, `INGEST_DOMAIN` | Hostnames of your own, see below |
 | `NAME_SUFFIX` | Only for another deployment in the same account, see below |
+| `RETENTION_DAYS`, `MAX_SKEW_SECS` | Settings of the receiver, see below |
 
 Git ignores the file. The two `wrangler.jsonc` files are committed and keep example values; the deploy targets put your values into generated configs (`wrangler.deploy.json`, `ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too, and `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public fork carries nobody's deployment, and you can deploy from the checkout you push from. Secrets were never in a committed file: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
 
@@ -66,14 +67,22 @@ The Workers are then `httpdog-house-ui-team-a` and `httpdog-house-ingest-team-a`
 
 ## Settings of the receiver
 
-In `ingest/wrangler.jsonc`:
+Two more values of `deploy.local.env`. Left empty, the default applies.
 
-| Variable | Default | Meaning |
+| Value | Default | Meaning |
 |---|---|---|
-| `MAX_SKEW_SECS` | `300` | How far a request's timestamp may be from the receiver's clock |
-| `RETENTION_DAYS` | `90` | Alerts older than this are deleted once a day. `0` keeps them forever |
+| `RETENTION_DAYS` | `400` | How many days an alert is kept. Older ones are deleted once a day. `0` keeps alerts forever |
+| `MAX_SKEW_SECS` | `300` | How far a request's timestamp may be from the receiver's clock, in seconds. A request outside it is refused |
 
-Change them there, then `make deploy-ingest`.
+```
+RETENTION_DAYS=30
+```
+
+```bash
+make deploy-ingest
+```
+
+A shorter time takes effect at the next daily run, which deletes what is now too old. Each deployment has its own values. Something that is not a whole number stops the deploy, so that a typing mistake cannot pass for the default.
 
 ## One step at a time
 

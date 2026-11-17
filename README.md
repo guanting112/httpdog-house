@@ -76,7 +76,7 @@ If httpdog logs `webhook attempt N failed` with a 401, open **rejected**: it lis
 - **Rejected.** What the receiver turned away is listed with the reason.
 - **People.** An admin manages keys and users; a viewer reads. Accounts are made on the **users** page.
 - **Locked out.** `make admin NAME=you` gives an account a new password.
-- **How long alerts are kept.** 90 days, unless `RETENTION_DAYS` in `ingest/wrangler.jsonc` says otherwise.
+- **How long alerts are kept.** 400 days. To change it, set `RETENTION_DAYS` in `deploy.local.env` and run `make deploy-ingest`; `0` keeps them forever.
 - **Logs.** `make tail-ingest` and `make tail-ui` follow the two Workers live.
 
 ## More
