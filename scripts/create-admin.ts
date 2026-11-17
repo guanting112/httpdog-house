@@ -13,8 +13,8 @@
 
 import { hashPassword, PASSWORD_MAX, PASSWORD_MIN, USERNAME } from '../server/utils/password'
 
-/** `database_name` in wrangler.jsonc */
-const DATABASE = 'httpdog-house'
+/** The database's binding in wrangler.jsonc. wrangler finds the database by it, whatever a deployment names it */
+const DATABASE = 'DB'
 
 function stop(message: string): never {
   console.error(message)

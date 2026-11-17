@@ -79,7 +79,19 @@ Everything is built on your machine and uploaded with wrangler. `make login` onc
 
 After that, `make deploy` is the whole deploy. `make deploy-ingest` and `make deploy-ui` upload one Worker each.
 
-**What is yours stays out of the repository.** `deploy.local.env` holds the database id, the receiver's address and your hostnames, and Git ignores it. The two `wrangler.jsonc` files are committed and keep their example values; the deploy targets put your values into generated configs (`ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too. `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public clone carries nobody's deployment, and you can go on deploying from the checkout you push from. Secrets were never in a file that is committed: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
+**What is yours stays out of the repository.** `deploy.local.env` holds the database id, the receiver's address and your hostnames, and Git ignores it. The two `wrangler.jsonc` files are committed and keep their example values; the deploy targets put your values into generated configs (`wrangler.deploy.json`, `ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too. `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public clone carries nobody's deployment, and you can go on deploying from the checkout you push from. Secrets were never in a file that is committed: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
+
+**More than one deployment in an account.** Each deployment has a file and names of its own. Copy `deploy.local.env.example` to `deploy.<suffix>.env`, set `NAME_SUFFIX` in it, and name the file on every command:
+
+```bash
+cp deploy.local.env.example deploy.team-a.env    # then set NAME_SUFFIX=team-a in it
+make db-create DEPLOY_ENV=deploy.team-a.env      # put the id it prints in that file
+make deploy    DEPLOY_ENV=deploy.team-a.env
+make secrets   DEPLOY_ENV=deploy.team-a.env
+make admin     DEPLOY_ENV=deploy.team-a.env NAME=you
+```
+
+The Workers are then `httpdog-house-ui-team-a` and `httpdog-house-ingest-team-a`, the database is `httpdog-house-team-a`, and the sign-in rate limiter gets a number of its own. Nothing is shared between deployments: each has its own `SECRETS_KEY`, accounts, keys and alerts. Every command that reaches Cloudflare first says which file it read and which Workers it is about to act on. Without `DEPLOY_ENV` the file is `deploy.local.env`, and with no `NAME_SUFFIX` the names are the plain ones. Files named `deploy.*.env` are ignored by Git.
 
 Settings of the receiver, in `ingest/wrangler.jsonc`:
 
@@ -217,8 +229,8 @@ Notes for whoever edits it:
 
 ## What has been checked
 
-- `make check`: type checks, and 43 unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, the receiver against the real schema (accepted, repeated, refused for each reason, and the daily clean-up), and the configs generated from `deploy.local.env`.
-- With an invented `deploy.local.env`, `wrangler deploy --dry-run` accepted both generated configs.
+- `make check`: type checks, and 46 unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, the receiver against the real schema (accepted, repeated, refused for each reason, and the daily clean-up), and the configs generated from `deploy.local.env`.
+- With invented `deploy.*.env` files, one of them with a `NAME_SUFFIX`, `wrangler deploy --dry-run` accepted the generated configs of both Workers.
 - On one machine (macOS, wrangler 4.163.0), with both Workers running in wrangler's local runtime: the real `httpdog` binary replaying `sample.log` delivered its 3 signed alerts, and with a wrong secret all 9 attempts were refused and recorded.
 - In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of a new alert, filters, creating, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer being kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
 - **Not checked: anything on Cloudflare itself.** Nothing has been deployed, so the real D1, the rate limiter, the daily timer and the CPU limit of the free plan are untested.

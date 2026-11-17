@@ -29,9 +29,10 @@ logs
 # Local values of the Workers' secrets (see .dev.vars.example)
 .dev.vars
 
-# What is yours about a deployment (see deploy.local.env.example), and the config generated from it
-deploy.local.env
-ingest/wrangler.deploy.json
+# What is yours about a deployment (see deploy.local.env.example; one file per deployment), and
+# the configs generated from it
+deploy.*.env
+wrangler.deploy.json
 
 # Notes for Claude Code on this machine
 CLAUDE.md

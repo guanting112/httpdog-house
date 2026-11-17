@@ -3,9 +3,14 @@
 // configs wrangler deploys from. The two wrangler.jsonc files that are committed keep their example
 // values, so a clone of the repository never carries anybody's deployment.
 //
-//   bun scripts/deploy-config.ts check    stop unless deploy.local.env is usable and the committed configs are still examples
-//   bun scripts/deploy-config.ts ingest   check, then write ingest/wrangler.deploy.json
-//   bun scripts/deploy-config.ts ui       check, then put the values into .output/server/wrangler.json (after `nuxt build`)
+//   bun scripts/deploy-config.ts check           stop unless the file is usable and the committed configs are still examples
+//   bun scripts/deploy-config.ts configs         check, then write wrangler.deploy.json and ingest/wrangler.deploy.json
+//   bun scripts/deploy-config.ts ui              check, then put the values into .output/server/wrangler.json (after `nuxt build`)
+//   bun scripts/deploy-config.ts database-name   print the name to create the database with
+//
+// One file is one deployment. A second deployment in the same Cloudflare account has a file of its
+// own with a NAME_SUFFIX, which names its two Workers and its database apart from the first's;
+// DEPLOY_ENV in the environment says which file to read (the Makefile passes it on).
 //
 // The Makefile runs these; nothing here uploads anything.
 
@@ -16,10 +21,11 @@ import { resolve } from 'node:path'
 export const PLACEHOLDER = '00000000-0000-0000-0000-000000000000'
 
 const ROOT = resolve(import.meta.dir, '..')
-const LOCAL = 'deploy.local.env'
+const LOCAL = process.env.DEPLOY_ENV || 'deploy.local.env'
 const UI_TEMPLATE = 'wrangler.jsonc'
 const INGEST_TEMPLATE = 'ingest/wrangler.jsonc'
-/** Next to its template, so the paths inside (src/index.ts, ../migrations) mean the same */
+/** Each next to its template, so the paths inside (src/index.ts, ../migrations) mean the same */
+const UI_DEPLOY = 'wrangler.deploy.json'
 const INGEST_DEPLOY = 'ingest/wrangler.deploy.json'
 /** What `nuxt build` generates from wrangler.jsonc, and what `wrangler deploy` uploads the UI from */
 const UI_BUILT = '.output/server/wrangler.json'
@@ -28,6 +34,8 @@ export type Worker = 'ui' | 'ingest'
 
 export interface DeployValues {
   databaseId: string
+  /** Added to the names of both Workers and the database: what tells two deployments in one account apart */
+  suffix?: string
   /** Where httpdog should POST; undefined leaves the example in place */
   ingestUrl?: string
   uiDomain?: string
@@ -35,7 +43,9 @@ export interface DeployValues {
 }
 
 export interface WranglerConfig {
-  d1_databases?: { database_id?: string }[]
+  name?: string
+  d1_databases?: { database_name?: string; database_id?: string }[]
+  ratelimits?: { namespace_id?: string }[]
   vars?: Record<string, string>
   routes?: unknown
   workers_dev?: boolean
@@ -57,10 +67,33 @@ export function parseEnv(text: string): Record<string, string> {
 }
 
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
+/** Short enough that the longer Worker name still fits in a workers.dev hostname label (63) */
+const SUFFIX = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/
+
+/** NAME_SUFFIX, checked. Read on its own before the database exists (`make db-create`) */
+export function readSuffix(env: Record<string, string>): string | undefined {
+  const suffix = env.NAME_SUFFIX || undefined
+  if (suffix && !SUFFIX.test(suffix)) throw new Error(`NAME_SUFFIX in ${LOCAL} is 1 to 32 of a-z, 0-9 and dash, not starting or ending with a dash`)
+  return suffix
+}
+
+const withSuffix = (name: string | undefined, suffix: string | undefined) => (name && suffix ? `${name}-${suffix}` : name)
+
+/**
+ * A rate limiter's namespace_id for a deployment with a suffix. Limiters with the same id share
+ * their counts across the account, so each deployment needs its own; this one follows from the
+ * suffix (FNV-1a), which keeps it the same from one deploy to the next.
+ */
+export function limiterNamespace(base: string, suffix: string): string {
+  let hash = 0x811c9dc5
+  for (const byte of new TextEncoder().encode(`${base}:${suffix}`)) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0
+  return String(100_000 + (hash % 900_000))
+}
 const HOSTNAME = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i
 
 /** The values of deploy.local.env, checked. Throws with a message meant for the terminal */
 export function readValues(env: Record<string, string>): DeployValues {
+  const suffix = readSuffix(env)
   const databaseId = env.DATABASE_ID ?? ''
   if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${LOCAL}; \`make db-create\` prints it`)
   if (!UUID.test(databaseId)) throw new Error(`DATABASE_ID in ${LOCAL} does not look like a D1 database id`)
@@ -82,14 +115,23 @@ export function readValues(env: Record<string, string>): DeployValues {
   } else if (ingestDomain) {
     ingestUrl = `https://${ingestDomain}/alerts`
   }
-  return { databaseId, ingestUrl, uiDomain, ingestDomain }
+  return { databaseId, suffix, ingestUrl, uiDomain, ingestDomain }
 }
 
 /** A copy of a Worker's config with the values in place of the examples */
 export function applyValues(config: WranglerConfig, values: DeployValues, worker: Worker): WranglerConfig {
+  const { suffix } = values
   const result: WranglerConfig = {
     ...config,
-    d1_databases: (config.d1_databases ?? []).map((database) => ({ ...database, database_id: values.databaseId })),
+    name: withSuffix(config.name, suffix),
+    d1_databases: (config.d1_databases ?? []).map((database) => ({
+      ...database,
+      database_name: withSuffix(database.database_name, suffix),
+      database_id: values.databaseId,
+    })),
+  }
+  if (suffix && config.ratelimits) {
+    result.ratelimits = config.ratelimits.map((limiter) => ({ ...limiter, namespace_id: limiterNamespace(limiter.namespace_id ?? '', suffix) }))
   }
   if (worker === 'ui' && values.ingestUrl) result.vars = { ...config.vars, INGEST_URL: values.ingestUrl }
   const hostname = worker === 'ui' ? values.uiDomain : values.ingestDomain
@@ -113,13 +155,17 @@ function readTemplate(path: string): WranglerConfig {
   return Bun.JSONC.parse(readFileSync(resolve(ROOT, path), 'utf8')) as WranglerConfig
 }
 
+function readLocal(): Record<string, string> {
+  return parseEnv(readFileSync(resolve(ROOT, LOCAL), 'utf8'))
+}
+
 function check(): DeployValues {
   for (const path of [UI_TEMPLATE, INGEST_TEMPLATE]) {
     const found = leak(readTemplate(path))
     if (found) throw new Error(`${path} has ${found}. That file is committed: move the value to ${LOCAL} and put the example back`)
   }
-  if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing: copy ${LOCAL}.example to it and fill in DATABASE_ID (\`make db-create\` does both)`)
-  return readValues(parseEnv(readFileSync(resolve(ROOT, LOCAL), 'utf8')))
+  if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing: copy deploy.local.env.example to it and fill in DATABASE_ID (\`make db-create\` writes the copy)`)
+  return readValues(readLocal())
 }
 
 function write(path: string, config: WranglerConfig) {
@@ -133,15 +179,24 @@ if (import.meta.main) {
     if (command === 'check') {
       const values = check()
       if (!values.ingestUrl) console.log(`note: neither INGEST_URL nor INGEST_DOMAIN is set in ${LOCAL}; the keys page will show the example address until one is`)
-    } else if (command === 'ingest') {
-      write(INGEST_DEPLOY, applyValues(readTemplate(INGEST_TEMPLATE), check(), 'ingest'))
+    } else if (command === 'configs') {
+      const values = check()
+      const ui = applyValues(readTemplate(UI_TEMPLATE), values, 'ui')
+      const ingest = applyValues(readTemplate(INGEST_TEMPLATE), values, 'ingest')
+      // Said every time: with more than one deployment, this is how to see which one is about to change
+      console.log(`${LOCAL}: Workers ${ui.name} and ${ingest.name}, database ${ingest.d1_databases?.[0]?.database_name}`)
+      write(UI_DEPLOY, ui)
+      write(INGEST_DEPLOY, ingest)
+    } else if (command === 'database-name') {
+      const suffix = existsSync(resolve(ROOT, LOCAL)) ? readSuffix(readLocal()) : undefined
+      console.log(withSuffix(readTemplate(UI_TEMPLATE).d1_databases?.[0]?.database_name, suffix))
     } else if (command === 'ui') {
       const values = check()
       if (!existsSync(resolve(ROOT, UI_BUILT))) throw new Error(`${UI_BUILT} is missing: build the UI first (make deploy-ui does both)`)
       const built = JSON.parse(readFileSync(resolve(ROOT, UI_BUILT), 'utf8')) as WranglerConfig
       write(UI_BUILT, applyValues(built, values, 'ui'))
     } else {
-      throw new Error('usage: bun scripts/deploy-config.ts check | ingest | ui')
+      throw new Error('usage: bun scripts/deploy-config.ts check | configs | ui | database-name')
     }
   } catch (error) {
     console.error(`error: ${error instanceof Error ? error.message : error}`)

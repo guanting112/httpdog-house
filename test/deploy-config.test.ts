@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { applyValues, leak, parseEnv, PLACEHOLDER, readValues, type WranglerConfig } from '../scripts/deploy-config'
+import { applyValues, leak, limiterNamespace, parseEnv, PLACEHOLDER, readValues, type WranglerConfig } from '../scripts/deploy-config'
 
 const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
 const template = (path: string) => Bun.JSONC.parse(readFileSync(resolve(import.meta.dir, '..', path), 'utf8')) as WranglerConfig
@@ -35,6 +35,39 @@ describe('deploy.local.env', () => {
     expect(readValues({ DATABASE_ID: ID, INGEST_DOMAIN: 'hook.example.com', INGEST_URL: 'https://other.example.com/alerts' }).ingestUrl).toBe(
       'https://other.example.com/alerts',
     )
+  })
+})
+
+describe('a second deployment in one account', () => {
+  test('NAME_SUFFIX is a short lowercase name', () => {
+    expect(readValues({ DATABASE_ID: ID, NAME_SUFFIX: 'team-a' }).suffix).toBe('team-a')
+    expect(readValues({ DATABASE_ID: ID, NAME_SUFFIX: '' }).suffix).toBeUndefined()
+    for (const bad of ['Team', 'team_a', '-team', 'team-', 'a'.repeat(33)]) {
+      expect(() => readValues({ DATABASE_ID: ID, NAME_SUFFIX: bad })).toThrow('NAME_SUFFIX')
+    }
+  })
+
+  test('the suffix names both Workers, the database and the rate limiter apart', () => {
+    const values = { databaseId: ID, suffix: 'team-a' }
+    const ui = applyValues(template('wrangler.jsonc'), values, 'ui')
+    const ingest = applyValues(template('ingest/wrangler.jsonc'), values, 'ingest')
+
+    expect([ui.name, ingest.name]).toEqual(['httpdog-house-ui-team-a', 'httpdog-house-ingest-team-a'])
+    expect(ingest.name!.length + 'a'.repeat(32).length - 'team-a'.length).toBeLessThanOrEqual(63)
+    expect([ui.d1_databases![0]!.database_name, ingest.d1_databases![0]!.database_name]).toEqual(['httpdog-house-team-a', 'httpdog-house-team-a'])
+
+    const namespace = ui.ratelimits![0]!.namespace_id!
+    expect(namespace).toMatch(/^[1-9]\d{5}$/)
+    expect(namespace).not.toBe(template('wrangler.jsonc').ratelimits![0]!.namespace_id)
+    expect(namespace).toBe(limiterNamespace('7301', 'team-a'))
+    expect(namespace).not.toBe(limiterNamespace('7301', 'team-b'))
+  })
+
+  test('without a suffix the names are the ones in the committed configs', () => {
+    const ui = applyValues(template('wrangler.jsonc'), { databaseId: ID }, 'ui')
+    expect(ui.name).toBe('httpdog-house-ui')
+    expect(ui.d1_databases![0]!.database_name).toBe('httpdog-house')
+    expect(ui.ratelimits).toEqual(template('wrangler.jsonc').ratelimits)
   })
 })
 

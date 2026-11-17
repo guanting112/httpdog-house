@@ -31,7 +31,8 @@
   },
 
   // Sign-in attempts allowed per address per minute (counted per Cloudflare location).
-  // namespace_id is any number that no other rate limiter in the account uses
+  // namespace_id is any number that no other rate limiter in the account uses (a deployment with
+  // a NAME_SUFFIX gets one of its own)
   "ratelimits": [{ "name": "LOGIN_LIMITER", "namespace_id": "7301", "simple": { "limit": 10, "period": 60 } }],
 
   // Keeps this Worker's logs (the audit lines of server/utils/http.ts, failures) in the Cloudflare dashboard

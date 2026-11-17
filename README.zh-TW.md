@@ -79,7 +79,19 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 
 之後 `make deploy` 就是完整的部署。`make deploy-ingest` 與 `make deploy-ui` 則各上傳一個 Worker。
 
-**你自己的資料不會進到 repository。** `deploy.local.env` 放的是資料庫 id、接收端網址與你的網域,Git 會忽略它。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這兩個檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 clone 不帶任何人的部署資料,你也可以繼續從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
+**你自己的資料不會進到 repository。** `deploy.local.env` 放的是資料庫 id、接收端網址與你的網域,Git 會忽略它。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`wrangler.deploy.json`、`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這些檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 clone 不帶任何人的部署資料,你也可以繼續從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
+
+**同一個帳號放多套部署。** 每一套部署有自己的檔案與自己的名稱。把 `deploy.local.env.example` 複製成 `deploy.<suffix>.env`,在裡面設定 `NAME_SUFFIX`,之後每個指令都指定這個檔案:
+
+```bash
+cp deploy.local.env.example deploy.team-a.env    # 然後在裡面設定 NAME_SUFFIX=team-a
+make db-create DEPLOY_ENV=deploy.team-a.env      # 把印出的 id 填進這個檔案
+make deploy    DEPLOY_ENV=deploy.team-a.env
+make secrets   DEPLOY_ENV=deploy.team-a.env
+make admin     DEPLOY_ENV=deploy.team-a.env NAME=you
+```
+
+這樣兩個 Worker 會叫 `httpdog-house-ui-team-a` 與 `httpdog-house-ingest-team-a`,資料庫叫 `httpdog-house-team-a`,登入的 rate limiter 也會有自己的編號。各套部署之間不共用任何東西:`SECRETS_KEY`、帳號、金鑰與告警都是各自一份。每個會連到 Cloudflare 的指令都會先印出它讀的是哪個檔案、要動的是哪兩個 Worker。不指定 `DEPLOY_ENV` 時讀的是 `deploy.local.env`;沒有設定 `NAME_SUFFIX` 時用的是不帶後綴的名稱。Git 會忽略所有 `deploy.*.env`。
 
 接收端的設定在 `ingest/wrangler.jsonc`:
 
@@ -217,8 +229,8 @@ notifiers:
 
 ## 驗證過的範圍
 
-- `make check`:型別檢查,以及 43 個單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),以及從 `deploy.local.env` 產生的設定檔。
-- 用一份虛構的 `deploy.local.env`,`wrangler deploy --dry-run` 接受了兩個產生出來的設定檔。
+- `make check`:型別檢查,以及 46 個單元測試,涵蓋簽章(httpdog 自己的測試向量)、加密、密碼、樣式比對、用真的資料表結構測接收端(接受、重複送達、每一種拒絕原因,還有每日清理),以及從 `deploy.local.env` 產生的設定檔。
+- 用幾份虛構的 `deploy.*.env`(其中一份有 `NAME_SUFFIX`),`wrangler deploy --dry-run` 接受了兩個 Worker 產生出來的設定檔。
 - 在一台機器上(macOS、wrangler 4.163.0),兩個 Worker 都跑在 wrangler 的本機執行環境裡:真的 `httpdog` 執行檔重播 `sample.log`,3 則已簽章的告警都送達;改用錯的 secret 時,9 次嘗試全部被拒絕並留下紀錄。
 - 用 headless Chrome 對 build 後的介面測試,HTTP 與 HTTPS 都跑過:登入、新告警即時出現、篩選、金鑰的建立、編輯、停用與刪除(每一步之後都檢查接收端的回應)、viewer 被擋在管理頁面與管理 API 之外、變更密碼,以及兩種語言、兩種主題在桌機與手機寬度下的頁面。
 - **沒有驗證:Cloudflare 上的任何東西。** 還沒有部署過,所以真正的 D1、速率限制、每日排程,以及免費方案的 CPU 上限都沒有測過。
