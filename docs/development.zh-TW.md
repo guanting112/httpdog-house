@@ -49,6 +49,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 | `docs/` | 部署、運作方式,以及這份文件,各有英文與繁體中文兩個版本;`social-preview.png` 是 README 最上面的封面圖 |
 | `.github/workflows/` | `check.yml`(每次 push 與 pull request 都跑 `make check` 與 `make dry-run`)、`fuzz.yml`(push 時用更多輸入,每週一次用多得多的輸入)、`codeql.yml`(每次 push 與 pull request、以及每週一次的靜態分析)與 `scorecard.yml`(每次 push 到 `main`、以及每週一次,公布 OpenSSF Scorecard 的結果) |
 | `.github/dependabot.yml` | 每週為套件與 action 的新版本開 pull request |
+| `osv-scanner.toml` | OSV-Scanner(也就是 OpenSSF Scorecard)對 `bun.lock` 回報、但其實不適用的公告,每一筆都寫了原因,以及過了哪一天就會再被回報 |
 | `SECURITY.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`LICENSE` | 如何回報漏洞;如何回報錯誤或提出修改;每個版本改了什麼;MIT License |
 | `test/` | 單元測試,以及 `fuzz.test.ts`:用產生出來的輸入去試所有接受外部輸入的地方。`d1.ts` 用記憶體內的 SQLite 加上真的資料表結構來代替 D1 |
 | `wrangler.jsonc` | 介面的 Worker,裡面是範例值。`nuxt build` 會把它合併到 `.output/server/wrangler.json` |

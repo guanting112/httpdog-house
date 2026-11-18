@@ -49,6 +49,7 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 | `docs/` | Deploying, how it works, and this file, each in English and Traditional Chinese; `social-preview.png` is the cover at the top of the README |
 | `.github/workflows/` | `check.yml` (`make check` and `make dry-run` on every push and pull request), `fuzz.yml` (more inputs on a push, far more once a week), `codeql.yml` (static analysis on every push and pull request, and once a week) and `scorecard.yml` (publishes the OpenSSF Scorecard result on every push to `main`, and once a week) |
 | `.github/dependabot.yml` | Weekly pull requests for new versions of the packages and of the actions |
+| `osv-scanner.toml` | Advisories that OSV-Scanner, and so OpenSSF Scorecard, reports for `bun.lock` but that do not apply to it, each with its reason and a date after which it is reported again |
 | `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE` | How to report a vulnerability; how to report a bug or send a change; what each version changed; the MIT License |
 | `test/` | Unit tests, and `fuzz.test.ts`, which tries generated inputs against what takes input from outside. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
 | `wrangler.jsonc` | The UI's Worker, with example values. `nuxt build` merges it into `.output/server/wrangler.json` |
