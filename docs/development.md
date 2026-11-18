@@ -49,7 +49,7 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 | `docs/` | Deploying, how it works, and this file, each in English and Traditional Chinese; `social-preview.png` is the cover at the top of the README |
 | `.github/workflows/` | `check.yml` (`make check` and `make dry-run` on every push and pull request), `fuzz.yml` (more inputs on a push, far more once a week), `codeql.yml` (static analysis on every push and pull request, and once a week) and `scorecard.yml` (publishes the OpenSSF Scorecard result on every push to `main`, and once a week) |
 | `.github/dependabot.yml` | Weekly pull requests for new versions of the packages and of the actions |
-| `SECURITY.md`, `LICENSE` | How to report a vulnerability; the MIT License |
+| `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `LICENSE` | How to report a vulnerability; how to report a bug or send a change; what each version changed; the MIT License |
 | `test/` | Unit tests, and `fuzz.test.ts`, which tries generated inputs against what takes input from outside. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
 | `wrangler.jsonc` | The UI's Worker, with example values. `nuxt build` merges it into `.output/server/wrangler.json` |
 
@@ -70,14 +70,24 @@ Notes for whoever edits it:
 
 ## What has been checked
 
-- `make check`: type checks, and 110 tests. 90 are unit tests covering the signature (httpdog's own test vector), encryption, passwords, patterns, the receiver against the real schema (accepted, repeated, refused for each reason, and the daily clean-up), the configs generated from `deploy.local.env`, and the steps of `make setup` against an account that exists only in the test.
-- With invented `deploy.*.env` files, one of them with a `NAME_SUFFIX`, `wrangler deploy --dry-run` accepted the generated configs of both Workers.
-- `make setup` end to end with stand-ins for wrangler and make that touch nothing: a first run, a second run that finds everything in place, and a run with no terminal to ask on. The first run was also driven in a pseudo-terminal, typing the yes, the name and the password, with an Enter pressed during an earlier step: that Enter once came out as the answer to the next question, and is now thrown away.
-- Fuzzing: the other 20 tests are properties in `test/fuzz.test.ts`, each tried with 200 generated inputs in `make check` and with 20,000 in `make fuzz`. They cover the receiver (nothing unsigned is stored and nothing is answered with an error; a signed alert is stored once whatever its fields hold; a body changed after signing and an instance no key lists are refused), signatures, the encryption of stored secrets, instance patterns, the text and highlighting of what is shown on a page, and `deploy.local.env`. The first runs found three things, since fixed: U+061C, a mark that reverses text, was shown as it was; a number such as `1e300` in a signed alert was stored as a time; and a value written to `deploy.local.env` could be changed on the way by a `$` in it or a `\r` in the line it replaced.
-- On one machine (macOS, wrangler 4.163.0), with both Workers running in wrangler's local runtime: the real `httpdog` binary replaying `sample.log` delivered its 3 signed alerts, and with a wrong secret all 9 attempts were refused and recorded.
-- In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of a new alert, filters, creating, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer being kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
-- The door, against the built UI running under wrangler on one machine, with an entry path set. Without the cookie, a page, an API call, `/favicon.svg`, `/robots.txt` and a script file all got the same `404 not found`, byte for byte, and so did a forged cookie and the cookie of another entry path. The entry address answered with a redirect to `/login` and the cookie; with it, pages, the API and the files answered as before, the files with their cache headers and a `304` to a conditional request. A headless Chrome saw `not found` at `/` and `/login`, and the sign-in page after the entry address. Not checked on Cloudflare.
-- The receiver with a path, under wrangler on one machine: `/`, `/alerts`, `/health` and paths one character off all answered `404 not found`; at its address `/health` answered `200`, a `GET` `405` and an unsigned `POST` `401`. Not checked on Cloudflare.
-- On GitHub's Linux runners: `check.yml` (`make check` and `make dry-run`) and `fuzz.yml` (5,000 inputs per property) passed on their first run.
-- `codeql.yml` and `scorecard.yml` ran for the first time when the repository became public: CodeQL reported no alert, and Scorecard published its result, which the badge in the README links to.
-- **Not checked: anything on Cloudflare itself.** Nothing has been deployed, so `make setup` against a real account, the real D1, the rate limiter, the daily timer and the CPU limit of the free plan are untested.
+**By the tests**
+
+- `make check`: the type checks and 110 tests. 89 are unit tests: the signature (httpdog's own test vector), encryption, passwords, patterns, the door, the receiver against the real schema (accepted, repeated, refused for each reason, the daily clean-up), the configs generated from `deploy.local.env`, and the steps of `make setup` against an account that exists only in the test.
+- The other 21 are properties in `test/fuzz.test.ts`, each tried with 200 generated inputs in `make check` and 20,000 in `make fuzz`: the receiver (nothing unsigned is stored, nothing is answered with an error, a signed alert is stored once whatever its fields hold), signatures, the encryption of stored secrets, instance patterns, the text shown on a page, and `deploy.local.env`. The first runs found three things, since fixed: U+061C, a mark that reverses text, was shown as it was; a number such as `1e300` in a signed alert was stored as a time; and a `$` or a `\r` could change a value on its way into `deploy.local.env`.
+- On GitHub, on every push: `check.yml`, `fuzz.yml` (5,000 inputs per property), `codeql.yml`, which has reported no alert, and `scorecard.yml`.
+
+**On one machine** (macOS, wrangler 4.163.0, both Workers in wrangler's local runtime)
+
+- The real `httpdog` binary replaying `sample.log` delivered its 3 signed alerts; with a wrong secret all 9 attempts were refused and recorded.
+- In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of an alert, filters, making, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
+- The door and the receiver's path, with both paths set: the same answers as on Cloudflare below, and also a forged cookie and the cookie of another entry path turned away, files answered with their cache headers and a `304` to a conditional request, and an unsigned `POST` answered `401`.
+- `make setup` end to end with stand-ins for wrangler and make, typed into a pseudo-terminal: a first run, a second run that finds everything in place, and a run with no terminal to ask on.
+- `wrangler deploy --dry-run` accepted the configs generated from invented `deploy.*.env` files, one of them with a `NAME_SUFFIX`.
+
+**On Cloudflare** (one account, the paid Workers plan)
+
+- `make setup` ran from start to finish, and the deployment is in use: signing in, the pages, signed alerts from httpdog arriving and listed, and a refused request shown under **rejected** with its reason.
+- The door, from outside: without the cookie, `/`, `/login`, an API call, `/favicon.svg` and a wrong entry path all got the same `404 not found`, byte for byte. The entry address answered with a redirect to `/login` and an `HttpOnly`, `Secure` cookie; with it, the pages, the API and the files answered.
+- The receiver, from outside: `/`, `/alerts`, `/health` and a wrong path answered `404 not found`; at its address `/health` answered `200` and a `GET` `405`.
+- The one exception is `/robots.txt`: this zone serves a robots.txt of Cloudflare's own, and a stranger gets that from both hostnames instead of `not found`. See [the sign-in address](deploying.md#the-sign-in-address).
+- **Not checked**: the free plan (the CPU time a sign-in needs), the sign-in rate limiter, the daily clean-up, and a second deployment with a `NAME_SUFFIX`.

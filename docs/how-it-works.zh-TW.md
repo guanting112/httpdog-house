@@ -81,8 +81,8 @@ httpdog (db-01)  ──┘   已簽章             驗證、儲存              
 - **簽章 secret 在資料庫裡是加密的**(AES-256-GCM),金鑰是只有兩個 Worker 持有的 `SECRETS_KEY`。只拿到資料庫的副本,拿不到 secret。如果 `SECRETS_KEY` 遺失,請設定一組新的(`make secrets FORCE=1`),再用「use one I already have」重新建立金鑰。
 - **密碼**以 PBKDF2-HMAC-SHA256 儲存,迭代 100,000 次(Workers 執行環境允許的上限),長度至少 10。登入限制為每個位址每分鐘 10 次。
 - **Session** 是放在 `HttpOnly`、`Secure`、`SameSite=Strict` cookie 裡的隨機 token;資料庫只存它的 SHA-256。
-- **陌生人什麼都看不到。** 瀏覽器沒有帶登入網址發的 cookie 時,不論要的是頁面、API 還是檔案,介面一律回 `not found`(`shared/door.ts`、`server/middleware/01.door.ts`)。cookie 是入口路徑的 SHA-256,所以不會洩漏路徑本身,而且是 `HttpOnly`。這是為了讓公開的主機名稱通不到任何地方;保護資料的仍然是後面的登入。
-- **陌生人送不了任何東西。** 接收端只在一個帶有猜不到的路徑的位址上收告警,其他位址一律回 `not found`,而且不讀取請求。所以 **rejected** 頁面上的拒絕紀錄,以及它們消耗的寫入,只可能是知道這個位址的人造成的。
+- **陌生人什麼都看不到。** 瀏覽器沒有帶登入網址發的 cookie 時,介面對任何請求一律回 `not found`(`shared/door.ts`、`server/middleware/01.door.ts`)。cookie 是入口路徑的 SHA-256,所以不會洩漏路徑本身,而且是 `HttpOnly`。保護資料的仍然是門後面的登入。詳見 [deploying.zh-TW.md](deploying.zh-TW.md#登入網址)。
+- **陌生人送不了任何東西。** 接收端除了自己的位址之外一律回 `not found`,而且不讀取請求,所以 **rejected** 頁面上的紀錄只可能來自知道這個位址的人。詳見 [deploying.zh-TW.md](deploying.zh-TW.md#接收端的網址)。
 - **API 自己檢查每一個請求**(`server/middleware/guard.ts`):所有請求都要有 session,`/api/admin` 要是 admin,而會變更資料的請求必須來自這個網站自己的頁面。
 - **來自 access log 的文字一律當作文字顯示。** 絕不會用它組出任何標記;控制字元與反轉文字方向的符號會顯示成跳脫形式;頁面帶有 Content-Security-Policy,只允許執行這個網站自己的 script。
 - **建議在 Cloudflare 後台加上**:在介面的網域前面放 Cloudflare Access,並在接收端的網域上設一條速率限制規則。

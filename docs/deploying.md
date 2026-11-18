@@ -19,7 +19,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 
 - **Each is a name under a domain that is in the same Cloudflare account**, and the two are different.
 - **Neither has a DNS record yet.** Each becomes a Custom Domain of its Worker: Cloudflare makes the DNS record and the certificate when the Worker is uploaded, so there is nothing to add by hand. A new hostname can take a minute or two to answer.
-- **A hostname is not a secret.** The certificate made for it is logged in public, as certificates are, and scanners visit every hostname they learn of. So the UI shows a stranger nothing: see [the sign-in address](#the-sign-in-address) below. A name that does not say what it is for gives less away still. The receiver has to stay open to your hosts, so it takes alerts at one address that nobody would guess, and answers "not found" at every other: see [the receiver's address](#the-receivers-address).
+- **A hostname is not a secret.** Its certificate is logged in public, and scanners visit every hostname they learn of. So the UI shows a stranger nothing (see [the sign-in address](#the-sign-in-address)), and the receiver takes alerts at one address that nobody would guess (see [the receiver's address](#the-receivers-address)). A name that does not say what it is for gives less away still.
 - **Changing a hostname later** is the same two lines and `make deploy`. Hosts then need the new address in `HTTPDOG_WEBHOOK_URL`, and alerts sent to the old one are lost.
 
 `make setup` in a checkout that has no `deploy.local.env` writes the file for you, says the above, and stops.
@@ -28,7 +28,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 
 | Step | What happens |
 |---|---|
-| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created. It says what to put in the file, and what `ENTRY_PATH` and `INGEST_PATH` in the same file are: a piece of the address you will sign in at and of the address httpdog sends to, each yours to choose now or left for `make setup` to make |
+| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created. It says what to put in the file, and what `ENTRY_PATH` and `INGEST_PATH` in it are, each yours to choose now or left for `make setup` to make |
 | 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` and a new `INGEST_PATH` in `deploy.local.env`, unless they are there |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
@@ -54,6 +54,7 @@ It is the one address of the UI that answers a browser it has not seen. Everythi
 - **`ENTRY_PATH` is in `deploy.local.env`.** `make setup` makes one of 16 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
 - **To change it**, set another and run `make deploy-ui`. Every browser is turned away again until it has been to the new address. Sessions are not ended by this; signing in is as before once a browser is through.
 - **It is not a password.** It keeps strangers and scanners from seeing what is here; what protects the alerts is still the login behind it. The address ends up in browser histories and in whatever it was sent through, so treat it as something to keep to yourselves, and change it when someone leaves.
+- **`/robots.txt` may be answered by Cloudflare.** Where the zone serves a robots.txt of Cloudflare's own, Cloudflare puts it in place of the Worker's `not found`, on both hostnames. The text is Cloudflare's and says nothing of what runs here. It is a setting of the zone in the Cloudflare dashboard, not of this project.
 - **On a machine there is no door**: `make dev` and `make preview` answer at every address.
 
 ## The receiver's address
@@ -66,7 +67,7 @@ It is what goes in `HTTPDOG_WEBHOOK_URL` on a host, and the keys page shows it w
 
 - **A stranger cannot send it anything.** Without the path there is no request to refuse, so nothing a stranger does shows up on the **rejected** page or costs a write to the database. What is listed there comes from someone who has the address: a host of yours with a wrong secret, a name no key lists, or a clock that is off.
 - **The signature is still what lets an alert in.** The path only decides who can try.
-- **`INGEST_PATH` is in `deploy.local.env`.** `make setup` makes one of 16 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
+- **`INGEST_PATH` is in `deploy.local.env`**, made by `make setup` or chosen by you, by the same rule as `ENTRY_PATH`.
 - **Leave it as it is once hosts send to it.** Changing it is changing `HTTPDOG_WEBHOOK_URL` on every host, and alerts sent to the old address in the meantime are lost: httpdog tries 3 times and gives up. If it has to change, set the new one, run `make deploy`, then update the hosts straight away.
 - **On a machine there is no path**: `make dev` takes alerts at `/alerts`.
 
@@ -88,8 +89,6 @@ The one place for what differs from one deployment to the next:
 | `RETENTION_DAYS`, `MAX_SKEW_SECS` | Settings of the receiver, see below |
 
 Git ignores the file. The two `wrangler.jsonc` files are committed and keep example values; the deploy targets put your values into generated configs (`wrangler.deploy.json`, `ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too, and `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public fork carries nobody's deployment, and you can deploy from the checkout you push from. Secrets were never in a committed file: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
-
-A file from before the hostnames were required may hold an `INGEST_URL` line. It is no longer read, and a deploy says so; the line can go.
 
 ## More than one deployment in an account
 
@@ -142,5 +141,5 @@ Check Cloudflare's own pages for today's numbers; this is what the design leans 
 
 - **Rows written.** An alert costs roughly 7 rows by D1's count (the row, its index entries and the two roll-ups), and deleting it later costs about the same again. The free plan's daily allowance of rows written is therefore the first limit a busy fleet meets.
 - **Rows read.** Lists and counts read a page at a time. The exception is search, which is bounded: one request looks through at most 50,000 alerts.
-- **CPU time.** Checking a password is deliberately slow. On the free plan a request gets 10 ms of CPU time, and a sign-in needs more than that. Whether Cloudflare tolerates it there has not been tested; if sign-in fails with error 1102, that is the cause, and the paid plan is the fix.
+- **CPU time.** Checking a password is deliberately slow. On the paid plan sign-in works. On the free plan a request gets 10 ms of CPU time, and a sign-in needs more than that; whether Cloudflare tolerates it there has not been tested. If sign-in fails with error 1102, that is the cause, and the paid plan is the fix.
 - Both Workers share one database, so both share its allowances.

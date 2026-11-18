@@ -4,6 +4,10 @@ Notable changes in each version. A version is a tag on `main`, such as `v0.1.0`,
 
 ## [Unreleased]
 
+### Documentation
+
+- The README and `docs/` say the same things in fewer words, and `docs/development.md` now lists what has been checked on Cloudflare itself: `make setup` on a real account, the door and the receiver's path from outside, and that `/robots.txt` may be answered by Cloudflare.
+
 ## [0.1.2] - 2026-11-19
 
 The deployed Workers behave the same as in 0.1.1.

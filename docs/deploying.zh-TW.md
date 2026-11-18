@@ -19,7 +19,7 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 
 - **兩個都要是同一個 Cloudflare 帳號裡某個網域底下的名稱**,而且不能相同。
 - **兩個都還沒有 DNS 紀錄。** 它們會各自成為所屬 Worker 的 Custom Domain:上傳 Worker 時 Cloudflare 會建立 DNS 紀錄與憑證,不需要手動加任何東西。新的主機名稱可能要一兩分鐘才會有回應。
-- **主機名稱不是祕密。** 為它簽發的憑證會像所有憑證一樣登錄在公開的紀錄裡,掃描器也會去拜訪它得知的每一個主機名稱。所以介面不會讓陌生人看到任何東西:見下方的[登入網址](#登入網址)。取一個看不出用途的名稱,透露的就更少。接收端則必須對你的主機開放,所以它只在一個沒有人猜得到的網址上收告警,其他網址一律回「not found」:見[接收端的網址](#接收端的網址)。
+- **主機名稱不是祕密。** 它的憑證會登錄在公開的紀錄裡,掃描器也會去拜訪它得知的每一個主機名稱。所以介面不會讓陌生人看到任何東西(見[登入網址](#登入網址)),接收端也只在一個沒有人猜得到的網址上收告警(見[接收端的網址](#接收端的網址))。取一個看不出用途的名稱,透露的就更少。
 - **之後要換主機名稱**,改這兩行再執行 `make deploy` 就可以。主機上的 `HTTPDOG_WEBHOOK_URL` 要跟著換成新的網址,送到舊網址的告警會遺失。
 
 在沒有 `deploy.local.env` 的 checkout 裡執行 `make setup`,它會替你建立這個檔案,說明上面這些事,然後停下來。
@@ -28,7 +28,7 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 
 | 步驟 | 做了什麼 |
 |---|---|
-| 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西。它會說明檔案裡要填什麼,也會提醒同一個檔案裡的 `ENTRY_PATH` 與 `INGEST_PATH` 是什麼:登入網址與 httpdog 送告警的網址各有一段由它們決定,可以現在自己取,也可以留空讓 `make setup` 產生 |
+| 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西。它會說明檔案裡要填什麼,以及裡面的 `ENTRY_PATH` 與 `INGEST_PATH` 是什麼:可以現在自己取,也可以留空讓 `make setup` 產生 |
 | 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號、要用哪兩個主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup`。回答 yes 之後,如果 `deploy.local.env` 還沒有 `ENTRY_PATH` 與 `INGEST_PATH`,它會各寫入一個新的 |
 | 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它 |
 | 3. 資料表 | 套用 `migrations/`。wrangler 會先問你要不要繼續 |
@@ -54,6 +54,7 @@ https://<UI_DOMAIN>/<ENTRY_PATH>
 - **`ENTRY_PATH` 放在 `deploy.local.env`。** `make setup` 會產生 16 個隨機字元,除非檔案裡已經有你自己設定的(8 到 64 個字母、數字、連字號或底線)。沒有它,任何部署都不會進行。
 - **要更換的話**,設定另一個再執行 `make deploy-ui`。在去過新的網址之前,每個瀏覽器都會再被擋在外面。這不會結束 session;瀏覽器通過之後,登入狀態和原本一樣。
 - **它不是密碼。** 它讓陌生人和掃描器看不到這裡有什麼;保護告警的仍然是後面的登入。這個網址會留在瀏覽器的歷史紀錄和傳送它的管道裡,所以請當成只有自己人知道的東西,有人離開時就換掉。
+- **`/robots.txt` 可能由 Cloudflare 回應。** 如果這個網域(zone)有 Cloudflare 自己提供的 robots.txt,Cloudflare 會用它取代 Worker 回的 `not found`,兩個主機名稱都一樣。內容是 Cloudflare 的制式文字,看不出這裡跑的是什麼。這是 Cloudflare 後台裡網域的設定,不是這個專案的設定。
 - **在本機上沒有這道門**:`make dev` 與 `make preview` 在任何網址都會回應。
 
 ## 接收端的網址
@@ -66,7 +67,7 @@ https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts
 
 - **陌生人送不了任何東西給它。** 不知道路徑就沒有請求可以拒絕,所以陌生人做的任何事都不會出現在 **rejected** 頁面上,也不會消耗資料庫的寫入。那裡列出來的都來自知道網址的人:secret 填錯、名稱沒有金鑰登記,或時鐘不準的自家主機。
 - **讓告警進得來的仍然是簽章。** 路徑只決定誰有機會嘗試。
-- **`INGEST_PATH` 放在 `deploy.local.env`。** `make setup` 會產生 16 個隨機字元,除非檔案裡已經有你自己設定的(8 到 64 個字母、數字、連字號或底線)。沒有它,任何部署都不會進行。
+- **`INGEST_PATH` 放在 `deploy.local.env`**,由 `make setup` 產生或由你自己設定,規則和 `ENTRY_PATH` 相同。
 - **已經有主機在送之後就不要動它。** 換掉它就等於要改每一台主機的 `HTTPDOG_WEBHOOK_URL`,而這段期間送到舊網址的告警會遺失:httpdog 重試 3 次就放棄。真的要換的話,設定新的、執行 `make deploy`,然後馬上更新主機。
 - **在本機上沒有這個路徑**:`make dev` 在 `/alerts` 收告警。
 
@@ -88,8 +89,6 @@ https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts
 | `RETENTION_DAYS`、`MAX_SKEW_SECS` | 接收端的設定,見下方 |
 
 Git 會忽略這個檔案。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`wrangler.deploy.json`、`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這些檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 fork 不帶任何人的部署資料,你也可以從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
-
-在主機名稱變成必填之前建立的檔案,裡面可能還有一行 `INGEST_URL`。它已經不會被讀取,部署時會提醒你;這一行可以刪掉。
 
 ## 同一個帳號放多套部署
 
@@ -142,5 +141,5 @@ make deploy-ingest
 
 - **寫入列數。** 依 D1 的算法,一則告警大約是 7 列(本身、索引,以及兩張彙總表),之後刪除它又是差不多的量。所以免費方案每天的寫入額度,會是告警量大時最先碰到的限制。
 - **讀取列數。** 列表與計數都是一次讀一頁。例外是搜尋,它有上限:一次請求最多檢查 50,000 則告警。
-- **CPU 時間。** 驗證密碼是刻意做得慢的。免費方案每個請求只有 10 ms 的 CPU 時間,登入需要的比這個多。Cloudflare 在免費方案上會不會放行還沒測過;如果登入失敗並出現錯誤 1102,原因就是這個,解法是付費方案。
+- **CPU 時間。** 驗證密碼是刻意做得慢的。在付費方案上登入正常。免費方案每個請求只有 10 ms 的 CPU 時間,登入需要的比這個多;Cloudflare 在免費方案上會不會放行還沒測過。如果登入失敗並出現錯誤 1102,原因就是這個,解法是付費方案。
 - 兩個 Worker 共用一個資料庫,所以也共用它的額度。
