@@ -73,7 +73,9 @@ It ends with the two addresses: `https://<UI_DOMAIN>/<entry path>` to sign in at
 
 Later, `git pull && make deploy` brings your deployment up to date.
 
-It has been deployed and used on the paid Workers plan. On the free plan, signing in may need more CPU time than a request gets, and that has not been tested. Choosing the hostnames, several deployments in one account, the settings and the limits are in [docs/deploying.md](docs/deploying.md).
+For more than one deployment in the same account, see [More than one deployment in an account](docs/deploying.md#more-than-one-deployment-in-an-account).
+
+It has been deployed and used on the paid Workers plan. On the free plan, signing in may need more CPU time than a request gets, and that has not been tested. Choosing the hostnames, the settings and the limits are in [docs/deploying.md](docs/deploying.md).
 
 ## Connect an httpdog
 
