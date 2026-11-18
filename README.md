@@ -1,5 +1,7 @@
 # httpdog-house
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/guanting112/httpdog-house/badge)](https://scorecard.dev/viewer/?uri=github.com/guanting112/httpdog-house)
+
 English | [繁體中文](README.zh-TW.md)
 
 The house your [httpdog](https://github.com/guanting112/httpdog)s report back to: every alert from every host, verified, stored and searchable, behind a login. It runs on your own Cloudflare account, and one command puts it there.
@@ -110,6 +112,6 @@ If httpdog logs `webhook attempt N failed` with a 401, open **rejected**: it lis
 
 ## Security and license
 
-Found a vulnerability? Please report it privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
+Found a vulnerability? Please report it privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue. For bugs and changes, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Released under the [MIT License](LICENSE).

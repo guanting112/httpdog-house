@@ -1,5 +1,7 @@
 # httpdog-house
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/guanting112/httpdog-house/badge)](https://scorecard.dev/viewer/?uri=github.com/guanting112/httpdog-house)
+
 [English](README.md) | 繁體中文
 
 你的 [httpdog](https://github.com/guanting112/httpdog) 回報的地方:每一台主機送來的每一則告警,都在這裡驗證、存起來、可以搜尋,而且要登入才看得到。它跑在你自己的 Cloudflare 帳號上,一個指令就能部署好。
@@ -110,6 +112,6 @@ notifiers:
 
 ## 安全性與授權
 
-發現漏洞的話,請依照 [SECURITY.md](SECURITY.md) 的說明私下回報,不要開公開的 issue。
+發現漏洞的話,請依照 [SECURITY.md](SECURITY.md) 的說明私下回報,不要開公開的 issue。回報錯誤或提出修改,請看 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 以 [MIT License](LICENSE) 釋出。
