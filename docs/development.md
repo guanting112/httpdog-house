@@ -46,7 +46,7 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 | `migrations/` | The database schema |
 | `scripts/` | `setup.ts` (the first deployment), `deploy-config.ts` (writes the configs to deploy from), `create-admin.ts` and `send-test-alert.ts` |
 | `deploy.local.env.example` | What differs from one deployment to the next. Your copy, `deploy.local.env`, is not committed |
-| `docs/` | Deploying, how it works, and this file, each in English and Traditional Chinese |
+| `docs/` | Deploying, how it works, and this file, each in English and Traditional Chinese; `social-preview.png` is the cover at the top of the README |
 | `.github/workflows/` | `check.yml` (`make check` and `make dry-run` on every push and pull request), `fuzz.yml` (more inputs on a push, far more once a week), `codeql.yml` (static analysis on every push and pull request, and once a week) and `scorecard.yml` (publishes the OpenSSF Scorecard result on every push to `main`, and once a week) |
 | `.github/dependabot.yml` | Weekly pull requests for new versions of the packages and of the actions |
 | `SECURITY.md`, `LICENSE` | How to report a vulnerability; the MIT License |

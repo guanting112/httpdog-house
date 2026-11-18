@@ -46,7 +46,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 | `migrations/` | 資料庫結構 |
 | `scripts/` | `setup.ts`(第一次部署)、`deploy-config.ts`(產生部署用的設定檔)、`create-admin.ts` 與 `send-test-alert.ts` |
 | `deploy.local.env.example` | 每一套部署不一樣的值。你自己的那份 `deploy.local.env` 不會進版本控制 |
-| `docs/` | 部署、運作方式,以及這份文件,各有英文與繁體中文兩個版本 |
+| `docs/` | 部署、運作方式,以及這份文件,各有英文與繁體中文兩個版本;`social-preview.png` 是 README 最上面的封面圖 |
 | `.github/workflows/` | `check.yml`(每次 push 與 pull request 都跑 `make check` 與 `make dry-run`)、`fuzz.yml`(push 時用更多輸入,每週一次用多得多的輸入)、`codeql.yml`(每次 push 與 pull request、以及每週一次的靜態分析)與 `scorecard.yml`(每次 push 到 `main`、以及每週一次,公布 OpenSSF Scorecard 的結果) |
 | `.github/dependabot.yml` | 每週為套件與 action 的新版本開 pull request |
 | `SECURITY.md`、`LICENSE` | 如何回報漏洞;MIT License |

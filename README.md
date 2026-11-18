@@ -1,7 +1,13 @@
 # httpdog-house
 
+[![check](https://github.com/guanting112/httpdog-house/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/guanting112/httpdog-house/actions/workflows/check.yml)
+[![version](https://img.shields.io/github/v/tag/guanting112/httpdog-house?sort=semver&label=version)](CHANGELOG.md)
+[![license](https://img.shields.io/github/license/guanting112/httpdog-house)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/guanting112/httpdog-house/badge)](https://scorecard.dev/viewer/?uri=github.com/guanting112/httpdog-house)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16887/badge)](https://www.bestpractices.dev/projects/16887)
+[![Cloudflare Workers and D1](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](docs/deploying.md)
+
+![httpdog-house: the house your httpdogs report back to. A dog drawn in characters sits in front of its house, with rows of alerts behind them](docs/social-preview.png)
 
 English | [繁體中文](README.zh-TW.md)
 
