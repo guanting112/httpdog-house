@@ -7,6 +7,9 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16887/badge)](https://www.bestpractices.dev/projects/16887)
 [![Cloudflare Workers and D1](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](docs/deploying.md)
 
+- 🐕 [httpdog](https://github.com/guanting112/httpdog): watches your website's access log and alerts you to suspicious or abnormal requests
+- 🏠 **httpdog-house** (you are here): collects the alerts from every server's httpdog into one searchable web page, on your own Cloudflare account
+
 ![httpdog-house: the house your httpdogs report back to. A dog drawn in characters sits in front of its house, with rows of alerts behind them](docs/social-preview.png)
 
 English | [繁體中文](README.zh-TW.md)
