@@ -7,6 +7,9 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16887/badge)](https://www.bestpractices.dev/projects/16887)
 [![Cloudflare Workers and D1](https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white)](docs/deploying.zh-TW.md)
 
+- 🐕 [httpdog](https://github.com/guanting112/httpdog/blob/main/README.zh-TW.md):盯著網站的 access log,看到可疑或異常的請求就通知你
+- 🏠 **httpdog-house**(你在這裡):把每台主機上 httpdog 的告警收進同一個可以搜尋的網頁,跑在你自己的 Cloudflare 帳號上
+
 ![httpdog-house:你的 httpdog 回報的地方。用字元畫成的狗坐在牠的屋子前面,背景是一列列的告警](docs/social-preview.png)
 
 [English](README.md) | 繁體中文
