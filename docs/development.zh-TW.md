@@ -47,7 +47,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 | `scripts/` | `setup.ts`(第一次部署)、`deploy-config.ts`(產生部署用的設定檔)、`create-admin.ts` 與 `send-test-alert.ts` |
 | `deploy.local.env.example` | 每一套部署不一樣的值。你自己的那份 `deploy.local.env` 不會進版本控制 |
 | `docs/` | 部署、運作方式,以及這份文件,各有英文與繁體中文兩個版本;`social-preview.png` 是 README 最上面的封面圖 |
-| `.github/workflows/` | `check.yml`(每次 push 與 pull request 都跑 `make check` 與 `make dry-run`)、`fuzz.yml`(push 時用更多輸入,每週一次用多得多的輸入)、`codeql.yml`(每次 push 與 pull request、以及每週一次的靜態分析)與 `scorecard.yml`(每次 push 到 `main`、以及每週一次,公布 OpenSSF Scorecard 的結果) |
+| `.github/workflows/` | `check.yml`(每次 push 與 pull request 都跑 `make check` 與 `make dry-run`)、`fuzz.yml`(push 時用更多輸入,每週一次用多得多的輸入)、`codeql.yml`(每次 push 與 pull request、以及每週一次的靜態分析)、`scorecard.yml`(每次 push 到 `main`、以及每週一次,公布 OpenSSF Scorecard 的結果)與 `release.yml`(release 發布時,附上該 tag 的原始碼壓縮檔,以及一份記錄它從哪裡來的簽章) |
 | `.github/dependabot.yml` | 每週為套件與 action 的新版本開 pull request |
 | `osv-scanner.toml` | OSV-Scanner(也就是 OpenSSF Scorecard)對 `bun.lock` 回報、但其實不適用的公告,每一筆都寫了原因,以及過了哪一天就會再被回報 |
 | `SECURITY.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`LICENSE` | 如何回報漏洞;如何回報錯誤或提出修改;每個版本改了什麼;MIT License |
@@ -59,7 +59,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 - **要與 httpdog 保持一致。** 請求內容、標頭與簽章是 httpdog 的對外介面(`docs/webhook.md`、`src/notify.rs`)。`test/shared.test.ts` 用 httpdog 自己測試用的同一組向量檢查簽章。
 - **更新 wrangler。** 它的版本是釘住的,Dependabot 會提議新版本。`scripts/setup.ts` 倚賴它的三個行為,這些是在 4.163.0 的原始碼裡確認的,而測試用的是替身,不會測到:`d1 list --json` 會印出含 `uuid` 與 `name` 的清單;`d1 create --update-config=false` 不會去改 `wrangler.jsonc`;`whoami --json` 會印出登入的是誰和他的帳號,沒有人登入時則以錯誤結束。升級前請重新確認。
 - **改動走 pull request。** CodeQL 會在 pull request 合併之前檢查它,這也是 OpenSSF Scorecard 認定的靜態分析:直接推到 `main` 的 commit 是事後才分析的,不會被計入。`check`、`fuzz` 與 CodeQL 都通過才合併。
-- **Workflow。** Action 一律釘在 commit SHA,每個 workflow 只要求它用得到的權限。它們都沒有 Cloudflare 的憑證,所以都不會部署。
+- **Workflow。** Action 一律釘在 commit SHA,每個 workflow 只要求它用得到的權限。它們都沒有 Cloudflare 的憑證,所以都不會部署。只有 `release.yml` 會寫入 repo:它在 release 發布之後上傳檔案,所以 repo 的 immutable releases 設定要保持關閉。
 - **檔案也在門後面。** 這需要兩件事,少了任何一件 `make deploy-ui` 都會拒絕上傳。一是 `wrangler.jsonc` 裡的 `run_worker_first`,否則 Cloudflare 會自己把 `public/` 的檔案交出去。二是這些檔案的綁定不能叫 `ASSETS`:Nitro 的 Worker 進入點只要看到這個名稱的綁定,就會在任何 middleware 執行之前把檔案交給來要的人,而且不管 `wrangler.jsonc` 怎麼寫,Nitro 都會把這個名稱寫進它產生的設定檔。所以 `bun run build` 會在之後把它改名為 `FILES`(`scripts/deploy-config.ts built`),由門自己把檔案交回去。更新 Nuxt 或 Nitro 之後,請用 `make preview` 確認沒有 cookie 時拿不到檔案。
 - **wrangler 與產生出來的設定檔。** build 之後,不帶 `-c` 執行的 wrangler 會使用 Nitro 產生的設定檔。這對部署介面是對的,對其他事情都是錯的,所以 `Makefile` 一律帶 `-c`。
 - **有進版本控制的設定檔裡不放真的值。** 真實部署的資料庫 id、網址或網域一律放在 `deploy.local.env`,不要寫進 `wrangler.jsonc`。要新增這類的值時,在 `deploy.local.env.example` 加一行,並由 `scripts/deploy-config.ts` 填進設定檔。
