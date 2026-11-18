@@ -4,6 +4,10 @@ Notable changes in each version. A version is a tag on `main`, such as `v0.1.0`,
 
 ## [Unreleased]
 
+### Added
+
+- A GitHub release comes with the source of its tag, `httpdog-house-vX.Y.Z.tar.gz`, and a signed record that this repository's `release.yml` made it from that tag. Check a downloaded archive with `gh attestation verify httpdog-house-vX.Y.Z.tar.gz -R guanting112/httpdog-house`.
+
 ### Documentation
 
 - The README and `docs/` say the same things in fewer words, and `docs/development.md` now lists what has been checked on Cloudflare itself: `make setup` on a real account, the door and the receiver's path from outside, and that `/robots.txt` may be answered by Cloudflare.

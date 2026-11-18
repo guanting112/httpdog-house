@@ -1,0 +1,62 @@
+name: release
+
+# When a GitHub release is published (gh release create vX.Y.Z), attach the source of its tag as
+# an archive, together with a signed statement that this workflow made that archive from that tag.
+# Anyone can then check a downloaded archive with:
+#   gh attestation verify httpdog-house-vX.Y.Z.tar.gz -R guanting112/httpdog-house
+#
+# The files are added after the release is published, so this needs the repository's immutable
+# releases setting to stay off: with it on, a published release takes no new files.
+#
+# Nothing here reaches Cloudflare. This repository's Actions hold no credentials; deploying is
+# done from a machine, with `make setup` and `make deploy`.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  attach:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # upload files to the release
+      id-token: write # sign the build provenance
+      attestations: write # store the build provenance
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      # Actions are always pinned to a commit SHA: a tag can be moved, a SHA cannot.
+      # On a release event this checks out the release's tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Archive the source of the tag
+        run: |
+          mkdir dist
+          git archive --format=tar.gz --prefix="httpdog-house-$TAG/" \
+            --output="dist/httpdog-house-$TAG.tar.gz" HEAD
+          ls -l dist
+      # Proves the archive was made by this workflow from this repository; GitHub keeps the
+      # attestation, so gh attestation verify finds it without any file from the release
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
+        with:
+          subject-path: dist/httpdog-house-*.tar.gz
+      # The same attestation as a release file, for gh attestation verify --bundle. It is attached
+      # under two names with the same content, as httpdog does:
+      #   httpdog-house.sigstore.json   what it is, a Sigstore bundle
+      #   httpdog-house.intoto.jsonl    what it holds, an in-toto statement of SLSA provenance, one
+      #                                 per line; the name OpenSSF Scorecard looks for to see that a
+      #                                 release has provenance
+      # --clobber lets a re-run of this workflow replace what an earlier run attached.
+      - name: Attach the archive and the attestation
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp "$BUNDLE" dist/httpdog-house.sigstore.json
+          cp "$BUNDLE" dist/httpdog-house.intoto.jsonl
+          gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
