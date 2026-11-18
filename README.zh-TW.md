@@ -73,7 +73,9 @@ make setup
 
 之後用 `git pull && make deploy` 更新你的部署。
 
-它在付費的 Workers 方案上部署並使用過。在免費方案上,登入需要的 CPU 時間可能超過單一請求的上限,這一點還沒有實測。主機名稱怎麼選、同一個帳號放多套部署、設定與限制,請看 [docs/deploying.zh-TW.md](docs/deploying.zh-TW.md)。
+要在同一個帳號放多套部署,請看[同一個帳號放多套部署](docs/deploying.zh-TW.md#同一個帳號放多套部署)。
+
+它在付費的 Workers 方案上部署並使用過。在免費方案上,登入需要的 CPU 時間可能超過單一請求的上限,這一點還沒有實測。主機名稱怎麼選、設定與限制,請看 [docs/deploying.zh-TW.md](docs/deploying.zh-TW.md)。
 
 ## 接上一台 httpdog
 
