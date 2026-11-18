@@ -4,6 +4,19 @@ Notable changes in each version. A version is a tag on `main`, such as `v0.1.0`.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-19
+
+The deployed Workers behave the same as in 0.1.0. The changes are in `make setup` and the README.
+
+### Changed
+
+- When `make setup` stops to ask for the two hostnames, it also says what `ENTRY_PATH` in the same file is: the last piece of the address you will sign in at, and the only way in. It can be chosen then, or left empty for `make setup` to make.
+- The paths `make setup` makes for `ENTRY_PATH` and `INGEST_PATH` are 16 random characters instead of 30, so an address is easier to pass on. Paths already in a `deploy.local.env` stay as they are.
+
+### Documentation
+
+- The README has a cover, and badges for the check workflow, the version, the license, the two OpenSSF results and where it runs.
+
 ## [0.1.0] - 2026-11-18
 
 The first numbered release.
@@ -19,5 +32,6 @@ The first numbered release.
 - **More than one deployment in an account**, each from an env file of its own.
 - **Retention.** Alerts are kept 365 days by default; `RETENTION_DAYS` changes it.
 
-[Unreleased]: https://github.com/guanting112/httpdog-house/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/guanting112/httpdog-house/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/guanting112/httpdog-house/tree/v0.1.1
 [0.1.0]: https://github.com/guanting112/httpdog-house/tree/v0.1.0

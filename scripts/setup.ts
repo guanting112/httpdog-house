@@ -2,7 +2,8 @@
 // at what is already there and does only what is missing.
 //
 //   before anything: the two hostnames of the deployment must be in deploy.local.env. Without them
-//      it stops, having written the file if it was not there, and says what to put in it
+//      it stops, having written the file if it was not there, and says what to put in it, and
+//      what ENTRY_PATH in the same file is
 //   1. log in to Cloudflare if this machine is not logged in, then say which account that is and
 //      go on only after a yes
 //      (and note two new paths in deploy.local.env, unless it has them: the one address of the UI
@@ -40,6 +41,17 @@ export interface Shell {
   read(path: string): string | null
   write(path: string, text: string): void
 }
+
+/**
+ * Said together with the hostnames, while the file is open anyway: what ENTRY_PATH in it is. Someone
+ * who learns of it only at the end may have missed the chance to pick a name of their own, and
+ * someone who never learns of it finds a hostname that answers "not found". No path is in it.
+ */
+export const ENTRY_NOTE = `While you are in that file: ENTRY_PATH is the last piece of the address you will sign in at,
+https://<UI_DOMAIN>/<ENTRY_PATH>. That address is the only way in: the hostname alone answers
+"not found". Leave ENTRY_PATH empty and \`make setup\` writes 16 random characters, or put a name
+of your own that nobody would guess (8 to 64 letters, digits, dashes and underscores).
+\`make setup\` ends by showing the whole address, and \`make entry\` shows it again.`
 
 /** A step that could not be done. The message says what to do about it */
 export class SetupError extends Error {}
@@ -97,7 +109,7 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
     const example = shell.read(LOCAL_EXAMPLE)
     if (example === null) throw new SetupError(`${LOCAL_EXAMPLE} is missing; is this a complete checkout?`)
     shell.write(LOCAL, example)
-    throw new SetupError(`Nothing was set up yet. ${LOCAL} was written: what is yours about this deployment is kept there, and Git ignores it.\n\n${HOSTNAMES_NEEDED}\n\nThen run \`make setup\` again.`)
+    throw new SetupError(`Nothing was set up yet. ${LOCAL} was written: what is yours about this deployment is kept there, and Git ignores it.\n\n${HOSTNAMES_NEEDED}\n\n${ENTRY_NOTE}\n\nThen run \`make setup\` again.`)
   }
   const values = () => parseEnv(shell.read(LOCAL) ?? '')
   const set = (key: string, value: string) => shell.write(LOCAL, setEnvValue(shell.read(LOCAL) ?? '', key, value))
@@ -105,7 +117,10 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
   try {
     domains = readDomains(values())
   } catch (error) {
-    throw new SetupError(`Nothing was set up yet.\n\n${error instanceof Error ? error.message : error}\n\nThen run \`make setup\` again.`)
+    const message = error instanceof Error ? error.message : String(error)
+    // the note goes with the hostnames being missing, not with one of them being mistyped
+    const note = message === HOSTNAMES_NEEDED ? `\n\n${ENTRY_NOTE}` : ''
+    throw new SetupError(`Nothing was set up yet.\n\n${message}${note}\n\nThen run \`make setup\` again.`)
   }
 
   let step = 0

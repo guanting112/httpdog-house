@@ -23,9 +23,12 @@ export function isEntryPath(value: unknown): value is string {
   return typeof value === 'string' && ENTRY.test(value)
 }
 
-/** A new entry path nobody could guess: 120 random bits as 30 hex digits */
+/**
+ * A new entry path nobody could guess: 64 random bits as 16 hex digits. Short enough to read out or
+ * type, and far more than can be tried over the network: each guess is a request to Cloudflare
+ */
 export function newEntryPath(): string {
-  return toHex(crypto.getRandomValues(new Uint8Array(15)))
+  return toHex(crypto.getRandomValues(new Uint8Array(8)))
 }
 
 /**

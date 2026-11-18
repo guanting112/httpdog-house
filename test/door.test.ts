@@ -62,9 +62,9 @@ describe('an entry path', () => {
     for (const bad of ['', 'short', 'x'.repeat(65), 'two/parts-here', 'with space1', 'dot.dot.dot', 'query?x=1yy', '%2e%2e%2f%2e', undefined, 12345678]) expect(isEntryPath(bad)).toBe(false)
   })
 
-  test('a new one is long, and never the same twice', () => {
+  test('a new one is 16 hex digits, and never the same twice', () => {
     const made = new Set(Array.from({ length: 200 }, newEntryPath))
     expect(made.size).toBe(200)
-    for (const entry of made) expect(entry).toMatch(/^[0-9a-f]{30}$/)
+    for (const entry of made) expect(entry).toMatch(/^[0-9a-f]{16}$/)
   })
 })

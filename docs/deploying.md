@@ -28,7 +28,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 
 | Step | What happens |
 |---|---|
-| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created |
+| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created. It says what to put in the file, and what `ENTRY_PATH` in the same file is: the last piece of the address you will sign in at, yours to choose now or left for `make setup` to make |
 | 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` and a new `INGEST_PATH` in `deploy.local.env`, unless they are there |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
@@ -51,7 +51,7 @@ It is the one address of the UI that answers a browser it has not seen. Everythi
 
 - **Opening the address once is enough.** It leaves a cookie and sends the browser on to the sign-in page. From then on that browser can use the hostname as it is, for 400 days, and opening the address again renews that.
 - **Each browser and each person needs it once.** Give a new user the address together with their account.
-- **`ENTRY_PATH` is in `deploy.local.env`.** `make setup` makes one of 30 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
+- **`ENTRY_PATH` is in `deploy.local.env`.** `make setup` makes one of 16 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
 - **To change it**, set another and run `make deploy-ui`. Every browser is turned away again until it has been to the new address. Sessions are not ended by this; signing in is as before once a browser is through.
 - **It is not a password.** It keeps strangers and scanners from seeing what is here; what protects the alerts is still the login behind it. The address ends up in browser histories and in whatever it was sent through, so treat it as something to keep to yourselves, and change it when someone leaves.
 - **On a machine there is no door**: `make dev` and `make preview` answer at every address.
@@ -66,7 +66,7 @@ It is what goes in `HTTPDOG_WEBHOOK_URL` on a host, and the keys page shows it w
 
 - **A stranger cannot send it anything.** Without the path there is no request to refuse, so nothing a stranger does shows up on the **rejected** page or costs a write to the database. What is listed there comes from someone who has the address: a host of yours with a wrong secret, a name no key lists, or a clock that is off.
 - **The signature is still what lets an alert in.** The path only decides who can try.
-- **`INGEST_PATH` is in `deploy.local.env`.** `make setup` makes one of 30 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
+- **`INGEST_PATH` is in `deploy.local.env`.** `make setup` makes one of 16 random characters, unless the file already has one of your own (8 to 64 letters, digits, dashes and underscores). No deploy goes on without it.
 - **Leave it as it is once hosts send to it.** Changing it is changing `HTTPDOG_WEBHOOK_URL` on every host, and alerts sent to the old address in the meantime are lost: httpdog tries 3 times and gives up. If it has to change, set the new one, run `make deploy`, then update the hosts straight away.
 - **On a machine there is no path**: `make dev` takes alerts at `/alerts`.
 
