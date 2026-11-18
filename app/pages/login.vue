@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // The only page that needs no session.
-import { DOG_ART } from '~/content/art'
+import { DOG_ART, HOUSE_ART } from '~/content/art'
 import { nextPath } from '~/lib/route'
 
 definePageMeta({ layout: false })
@@ -34,7 +34,11 @@ async function submit() {
 
 <template>
   <main class="login">
-    <pre class="art" aria-hidden="true">{{ DOG_ART }}</pre>
+    <!-- the dog, sitting in front of its house -->
+    <div class="arts" aria-hidden="true">
+      <pre class="art art--house">{{ HOUSE_ART }}</pre>
+      <pre class="art">{{ DOG_ART }}</pre>
+    </div>
 
     <form class="panel box" @submit.prevent="submit">
       <header class="panel-bar">
@@ -71,10 +75,17 @@ async function submit() {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
+  /* when the form wraps under the picture, the two stay together in the middle of the page */
+  align-content: center;
   gap: clamp(1.5rem, 6vw, 4.5rem);
   padding: 2rem var(--gutter);
   /* a little light behind the dog, so the black is not flat */
   background: radial-gradient(50% 60% at 50% 50%, rgba(var(--amber-rgb), 0.06), transparent 70%);
+}
+.arts {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.4rem;
 }
 .art {
   font-size: 0.88rem;
@@ -83,6 +94,11 @@ async function submit() {
   color: var(--amber);
   text-shadow: 0 0 10px rgba(var(--amber-rgb), calc(0.5 * var(--glow)));
   user-select: none;
+}
+/* the house stands behind the dog: a little dimmer, and without the glow */
+.art--house {
+  color: var(--amber-soft);
+  text-shadow: none;
 }
 .box {
   width: min(24rem, 100%);
@@ -99,7 +115,7 @@ async function submit() {
   font-size: 0.9rem;
 }
 @media (max-width: 640px) {
-  .art {
+  .arts {
     display: none;
   }
 }

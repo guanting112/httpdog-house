@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Shown for an address the app does not have, and when a page fails to render.
 import type { NuxtError } from '#app'
-import { DOG_ART } from '~/content/art'
+import { DOG_ART, HOUSE_ART } from '~/content/art'
 
 const props = defineProps<{ error: NuxtError }>()
 
@@ -15,7 +15,11 @@ useHead({ title: () => `${status.value} | httpdog house`, htmlAttrs: { lang: () 
 
 <template>
   <main class="lost">
-    <pre class="art" aria-hidden="true">{{ DOG_ART }}</pre>
+    <!-- the dog, sitting in front of its house -->
+    <div class="arts" aria-hidden="true">
+      <pre class="art art--house">{{ HOUSE_ART }}</pre>
+      <pre class="art">{{ DOG_ART }}</pre>
+    </div>
     <div>
       <p class="line"><span class="amber">&gt;</span> GET {{ route.path }} <span class="red">{{ status }}</span></p>
       <h1>{{ missing ? c.notFound.title : c.notFound.broken }}</h1>
@@ -32,9 +36,16 @@ useHead({ title: () => `${status.value} | httpdog house`, htmlAttrs: { lang: () 
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
+  /* when the text wraps under the picture, the two stay together in the middle of the page */
+  align-content: center;
   gap: clamp(1.5rem, 6vw, 4rem);
   padding: 2rem var(--gutter);
   background: radial-gradient(50% 60% at 50% 50%, rgba(var(--amber-rgb), 0.06), transparent 70%);
+}
+.arts {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.4rem;
 }
 .art {
   font-size: 0.88rem;
@@ -43,6 +54,11 @@ useHead({ title: () => `${status.value} | httpdog house`, htmlAttrs: { lang: () 
   color: var(--amber);
   text-shadow: 0 0 10px rgba(var(--amber-rgb), calc(0.5 * var(--glow)));
   user-select: none;
+}
+/* the house stands behind the dog: a little dimmer, and without the glow */
+.art--house {
+  color: var(--amber-soft);
+  text-shadow: none;
 }
 .line {
   font-size: 0.9rem;
@@ -59,5 +75,11 @@ h1 {
 .body {
   margin: 0.8rem 0 1.8rem;
   color: var(--dim);
+}
+/* this page keeps its dog on a phone, where the house would not fit beside it */
+@media (max-width: 480px) {
+  .art--house {
+    display: none;
+  }
 }
 </style>
