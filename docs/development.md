@@ -47,7 +47,7 @@ The alerts page shows them within a few seconds, without a reload. Send one with
 | `scripts/` | `setup.ts` (the first deployment), `deploy-config.ts` (writes the configs to deploy from), `create-admin.ts` and `send-test-alert.ts` |
 | `deploy.local.env.example` | What differs from one deployment to the next. Your copy, `deploy.local.env`, is not committed |
 | `docs/` | Deploying, how it works, and this file, each in English and Traditional Chinese |
-| `.github/workflows/` | `check.yml` (`make check` and `make dry-run` on every push and pull request), `fuzz.yml` (more inputs on a push, far more once a week), `codeql.yml` and `scorecard.yml` (both wait until the repository is public) |
+| `.github/workflows/` | `check.yml` (`make check` and `make dry-run` on every push and pull request), `fuzz.yml` (more inputs on a push, far more once a week), `codeql.yml` (static analysis on every push and pull request, and once a week) and `scorecard.yml` (publishes the OpenSSF Scorecard result on every push to `main`, and once a week) |
 | `.github/dependabot.yml` | Weekly pull requests for new versions of the packages and of the actions |
 | `SECURITY.md`, `LICENSE` | How to report a vulnerability; the MIT License |
 | `test/` | Unit tests, and `fuzz.test.ts`, which tries generated inputs against what takes input from outside. `d1.ts` stands in for D1 with an in-memory SQLite that has the real schema |
@@ -79,5 +79,5 @@ Notes for whoever edits it:
 - The door, against the built UI running under wrangler on one machine, with an entry path set. Without the cookie, a page, an API call, `/favicon.svg`, `/robots.txt` and a script file all got the same `404 not found`, byte for byte, and so did a forged cookie and the cookie of another entry path. The entry address answered with a redirect to `/login` and the cookie; with it, pages, the API and the files answered as before, the files with their cache headers and a `304` to a conditional request. A headless Chrome saw `not found` at `/` and `/login`, and the sign-in page after the entry address. Not checked on Cloudflare.
 - The receiver with a path, under wrangler on one machine: `/`, `/alerts`, `/health` and paths one character off all answered `404 not found`; at its address `/health` answered `200`, a `GET` `405` and an unsigned `POST` `401`. Not checked on Cloudflare.
 - On GitHub's Linux runners: `check.yml` (`make check` and `make dry-run`) and `fuzz.yml` (5,000 inputs per property) passed on their first run.
-- **Not checked: `codeql.yml` and `scorecard.yml`.** They are skipped while the repository is private, so they have not run.
+- `codeql.yml` and `scorecard.yml` ran for the first time when the repository became public: CodeQL reported no alert, and Scorecard published its result, which the badge in the README links to.
 - **Not checked: anything on Cloudflare itself.** Nothing has been deployed, so `make setup` against a real account, the real D1, the rate limiter, the daily timer and the CPU limit of the free plan are untested.

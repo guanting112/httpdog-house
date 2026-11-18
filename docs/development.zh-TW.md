@@ -47,7 +47,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 | `scripts/` | `setup.ts`(第一次部署)、`deploy-config.ts`(產生部署用的設定檔)、`create-admin.ts` 與 `send-test-alert.ts` |
 | `deploy.local.env.example` | 每一套部署不一樣的值。你自己的那份 `deploy.local.env` 不會進版本控制 |
 | `docs/` | 部署、運作方式,以及這份文件,各有英文與繁體中文兩個版本 |
-| `.github/workflows/` | `check.yml`(每次 push 與 pull request 都跑 `make check` 與 `make dry-run`)、`fuzz.yml`(push 時用更多輸入,每週一次用多得多的輸入)、`codeql.yml` 與 `scorecard.yml`(兩者要等 repository 公開後才會執行) |
+| `.github/workflows/` | `check.yml`(每次 push 與 pull request 都跑 `make check` 與 `make dry-run`)、`fuzz.yml`(push 時用更多輸入,每週一次用多得多的輸入)、`codeql.yml`(每次 push 與 pull request、以及每週一次的靜態分析)與 `scorecard.yml`(每次 push 到 `main`、以及每週一次,公布 OpenSSF Scorecard 的結果) |
 | `.github/dependabot.yml` | 每週為套件與 action 的新版本開 pull request |
 | `SECURITY.md`、`LICENSE` | 如何回報漏洞;MIT License |
 | `test/` | 單元測試,以及 `fuzz.test.ts`:用產生出來的輸入去試所有接受外部輸入的地方。`d1.ts` 用記憶體內的 SQLite 加上真的資料表結構來代替 D1 |
@@ -79,5 +79,5 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 - 門:在一台機器上,用 wrangler 執行 build 後的介面,並設定了入口路徑。沒有 cookie 時,頁面、API、`/favicon.svg`、`/robots.txt` 和 script 檔案得到的都是完全相同的 `404 not found`,偽造的 cookie 和另一個入口路徑的 cookie 也一樣。入口網址回的是導向 `/login` 的重新導向和 cookie;帶著它之後,頁面、API 與檔案都照常回應,檔案帶著原本的快取標頭,條件式請求得到 `304`。headless Chrome 在 `/` 與 `/login` 看到的是 `not found`,走過入口網址之後看到登入頁。沒有在 Cloudflare 上驗證。
 - 設定了路徑的接收端,在一台機器上用 wrangler 執行:`/`、`/alerts`、`/health` 和差一個字元的路徑都回 `404 not found`;在它的位址上,`/health` 回 `200`、`GET` 回 `405`、沒有簽章的 `POST` 回 `401`。沒有在 Cloudflare 上驗證。
 - 在 GitHub 的 Linux runner 上:`check.yml`(`make check` 與 `make dry-run`)與 `fuzz.yml`(每個性質 5,000 組輸入)第一次執行就通過。
-- **沒有驗證:`codeql.yml` 與 `scorecard.yml`。** repository 還是 private 時它們會被略過,所以還沒有執行過。
+- `codeql.yml` 與 `scorecard.yml` 在 repository 公開後第一次執行:CodeQL 沒有回報任何問題,Scorecard 公布了結果,README 的徽章會連到那裡。
 - **沒有驗證:Cloudflare 上的任何東西。** 還沒有部署過,所以對真實帳號執行 `make setup`、真正的 D1、速率限制、每日排程,以及免費方案的 CPU 上限都沒有測過。

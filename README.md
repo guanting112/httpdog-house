@@ -1,6 +1,7 @@
 # httpdog-house
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/guanting112/httpdog-house/badge)](https://scorecard.dev/viewer/?uri=github.com/guanting112/httpdog-house)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16887/badge)](https://www.bestpractices.dev/projects/16887)
 
 English | [繁體中文](README.zh-TW.md)
 
@@ -112,6 +113,6 @@ If httpdog logs `webhook attempt N failed` with a 401, open **rejected**: it lis
 
 ## Security and license
 
-Found a vulnerability? Please report it privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue. For bugs and changes, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Found a vulnerability? Please report it privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue. For bugs and changes, see [CONTRIBUTING.md](CONTRIBUTING.md); what each version changed is in [CHANGELOG.md](CHANGELOG.md).
 
 Released under the [MIT License](LICENSE).

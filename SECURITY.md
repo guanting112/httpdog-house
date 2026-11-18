@@ -4,7 +4,7 @@
 
 ## Supported versions
 
-Only the latest commit on `main` receives security fixes. There are no numbered releases: a deployment is brought up to date with `git pull && make deploy`.
+Only the latest release receives security fixes. A fix lands on `main` and ships as a new release; older releases are not patched. A deployment is brought up to date with `git pull && make deploy`.
 
 ## Reporting a vulnerability
 

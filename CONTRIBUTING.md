@@ -51,6 +51,7 @@ make fuzz    # 20,000 inputs per fuzz property
 - `make check` passes without type errors.
 - Code comments, program output and commit messages are in English.
 - Commit messages start with a short summary in the imperative ("Add a filter for the key"). The body says why the change is needed and what it does differently.
+- Add a line to the `Unreleased` section of [CHANGELOG.md](CHANGELOG.md) for anything someone who runs a deployment would notice.
 
 ## License
 

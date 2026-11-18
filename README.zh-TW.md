@@ -1,6 +1,7 @@
 # httpdog-house
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/guanting112/httpdog-house/badge)](https://scorecard.dev/viewer/?uri=github.com/guanting112/httpdog-house)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16887/badge)](https://www.bestpractices.dev/projects/16887)
 
 [English](README.md) | 繁體中文
 
@@ -112,6 +113,6 @@ notifiers:
 
 ## 安全性與授權
 
-發現漏洞的話,請依照 [SECURITY.md](SECURITY.md) 的說明私下回報,不要開公開的 issue。回報錯誤或提出修改,請看 [CONTRIBUTING.md](CONTRIBUTING.md)。
+發現漏洞的話,請依照 [SECURITY.md](SECURITY.md) 的說明私下回報,不要開公開的 issue。回報錯誤或提出修改,請看 [CONTRIBUTING.md](CONTRIBUTING.md);每個版本改了什麼,記錄在 [CHANGELOG.md](CHANGELOG.md)。
 
 以 [MIT License](LICENSE) 釋出。
