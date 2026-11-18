@@ -4,8 +4,8 @@
 //   before anything: the two hostnames of the deployment must be in deploy.local.env. Without them
 //      it stops, having written the file if it was not there, and says what to put in it, and
 //      what ENTRY_PATH and INGEST_PATH in the same file are
-//   1. log in to Cloudflare if this machine is not logged in, then say which account that is and
-//      go on only after a yes
+//   1. log in to Cloudflare if this machine is not logged in, then say which account that is, and
+//      which two Workers and which database it is about to make or use, and go on only after a yes
 //      (and note two new paths in deploy.local.env, unless it has them: the one address of the UI
 //      that lets a browser in, and the one address the receiver takes alerts at)
 //   2. create the D1 database and note its id in deploy.local.env
@@ -15,14 +15,15 @@
 //   6. give both Workers the same new SECRETS_KEY
 //   7. make the first admin
 //
-// The file is the one scripts/deploy-config.ts reads; with DEPLOY_ENV=deploy.<suffix>.env it sets
-// up another deployment in the same account. After this, `make deploy` is all an update needs.
+// The file is the one scripts/deploy-config.ts reads; with DEPLOY_ENV=deploy.<name>.env it sets
+// up another deployment in the same account, whose Workers and database end in -<name>. After
+// this, `make deploy` is all an update needs.
 
-import { closeSync, constants, existsSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs'
+import { closeSync, constants, existsSync, openSync, readdirSync, readFileSync, readSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { USERNAME } from '../server/utils/password'
 import { isEntryPath, newEntryPath } from '../shared/door'
-import { databaseName, entryUrl, HOSTNAMES_NEEDED, INGEST_DEPLOY, ingestUrl, LOCAL, LOCAL_EXAMPLE, parseEnv, readDomains, readSuffix, ROOT, UI_DEPLOY } from './deploy-config'
+import { deploymentNames, entryUrl, HOSTNAMES_NEEDED, INGEST_DEPLOY, ingestUrl, LOCAL, LOCAL_EXAMPLE, otherDeployments, parseEnv, readDomains, readSuffix, ROOT, sharedWith, suffixOf, UI_DEPLOY } from './deploy-config'
 
 const WRANGLER = ['bunx', 'wrangler']
 const MAKE = ['make', '--no-print-directory']
@@ -40,6 +41,8 @@ export interface Shell {
   log(line: string): void
   read(path: string): string | null
   write(path: string, text: string): void
+  /** The names of the files at the top of the checkout, where the other deployments' files are */
+  files(): string[]
 }
 
 /**
@@ -73,11 +76,12 @@ export function setEnvValue(text: string, key: string, value: string): string {
   return `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${key}=${value}\n`
 }
 
-/** The id of the database with this name in what `wrangler d1 list --json` printed */
-export function findDatabase(listJson: string, name: string): string | undefined {
+/** The databases of the account in what `wrangler d1 list --json` printed, or undefined when it is not that */
+export function readDatabases(listJson: string): { name: string; uuid: string }[] | undefined {
   try {
-    const databases = JSON.parse(listJson) as { name?: string; uuid?: string }[]
-    return databases.find((database) => database.name === name)?.uuid
+    const databases = JSON.parse(listJson) as unknown
+    if (!Array.isArray(databases)) return undefined
+    return (databases as { name?: unknown; uuid?: unknown }[]).flatMap(({ name, uuid }) => (typeof name === 'string' && typeof uuid === 'string' ? [{ name, uuid }] : []))
   } catch {
     return undefined
   }
@@ -110,17 +114,37 @@ export function readLogin(whoamiJson: string): Login | undefined {
   }
 }
 
-export async function setup(shell: Shell): Promise<{ ui: string; receiver: string }> {
+/**
+ * Said when another deployment's file is written: the file's name is the deployment's name, and
+ * it is written down nowhere else
+ */
+export function namedAfter(file: string, suffix: string): string {
+  const names = deploymentNames(suffix)
+  return `This deployment's names come from the file's name: its Workers are ${names.ui} and ${names.ingest}, and its database is ${names.database}. Keep the file's name: under another one, it is another deployment.`
+}
+
+/** The file of the deployment to set up: deploy.local.env, unless DEPLOY_ENV names another */
+export async function setup(shell: Shell, file = LOCAL): Promise<{ ui: string; receiver: string }> {
+  const nothingYet = (error: unknown) => new SetupError(`Nothing was set up yet.\n\n${error instanceof Error ? error.message : error}`)
+  // The file's name first: it names the deployment, and a name of another shape is not one Git ignores
+  let suffix: string | undefined
+  try {
+    suffix = suffixOf(file)
+  } catch (error) {
+    throw nothingYet(error)
+  }
+
   // Before anything, and before anyone is asked anything: the two hostnames. They are the one thing
   // a person has to decide, and a deployment without them is not made
-  if (shell.read(LOCAL) === null) {
+  if (shell.read(file) === null) {
     const example = shell.read(LOCAL_EXAMPLE)
     if (example === null) throw new SetupError(`${LOCAL_EXAMPLE} is missing; is this a complete checkout?`)
-    shell.write(LOCAL, example)
-    throw new SetupError(`Nothing was set up yet. ${LOCAL} was written: what is yours about this deployment is kept there, and Git ignores it.\n\n${HOSTNAMES_NEEDED}\n\n${PATHS_NOTE}\n\nThen run \`make setup\` again.`)
+    shell.write(file, example)
+    const named = suffix ? `\n\n${namedAfter(file, suffix)}` : ''
+    throw new SetupError(`Nothing was set up yet. ${file} was written: what is yours about this deployment is kept there, and Git ignores it.${named}\n\n${HOSTNAMES_NEEDED}\n\n${PATHS_NOTE}\n\nThen run \`make setup\` again.`)
   }
-  const values = () => parseEnv(shell.read(LOCAL) ?? '')
-  const set = (key: string, value: string) => shell.write(LOCAL, setEnvValue(shell.read(LOCAL) ?? '', key, value))
+  const values = () => parseEnv(shell.read(file) ?? '')
+  const set = (key: string, value: string) => shell.write(file, setEnvValue(shell.read(file) ?? '', key, value))
   let domains: { uiDomain: string; ingestDomain: string }
   try {
     domains = readDomains(values())
@@ -130,6 +154,17 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
     const note = message === HOSTNAMES_NEEDED ? `\n\n${PATHS_NOTE}` : ''
     throw new SetupError(`Nothing was set up yet.\n\n${message}${note}\n\nThen run \`make setup\` again.`)
   }
+  // What else the checkout alone can tell, before Cloudflare is looked at: a NAME_SUFFIX of an
+  // older file that disagrees with the file's name, and a file that shares a database or a hostname
+  // with another deployment's file
+  try {
+    suffix = readSuffix(file, values())
+    const shared = sharedWith(file, values(), otherDeployments(file, shell.files(), shell.read))
+    if (shared) throw new Error(shared)
+  } catch (error) {
+    throw nothingYet(error)
+  }
+  const names = deploymentNames(suffix)
 
   let step = 0
   const say = (title: string) => shell.log(`\n[${++step}/7] ${title}`)
@@ -170,7 +205,43 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
     }
   }
   if (!target) throw new SetupError(`${login.email} has no Cloudflare account to deploy to.`)
-  shell.log(`${domains.uiDomain} to sign in at, ${domains.ingestDomain} for httpdog to send to`)
+
+  // Which database, looked up before the question so that the yes covers it too. One the file
+  // names already has to be this deployment's: a file copied from another deployment's would put
+  // a second pair of Workers on that deployment's database
+  const listDatabases = async () => {
+    const result = await shell.capture([...WRANGLER, 'd1', 'list', '--json'])
+    const databases = result.code === 0 ? readDatabases(result.stdout) : undefined
+    if (!databases) throw new SetupError(`Could not list the databases of the account.\n${result.stderr.trim()}`)
+    return databases
+  }
+  const databases = await listDatabases()
+  const noted = values().DATABASE_ID
+  /** The id of the database the account already has under this deployment's name, when the file names none */
+  let existing: string | undefined
+  let database: string
+  if (noted) {
+    const found = databases.find(({ uuid }) => uuid === noted)
+    if (!found) {
+      throw new SetupError(
+        `DATABASE_ID in ${file} is not a database of "${target.name}". If this deployment is in another account, log in to that one; if its database was deleted, empty DATABASE_ID and \`make setup\` makes a new one.`,
+      )
+    }
+    if (found.name !== names.database) {
+      throw new SetupError(
+        `DATABASE_ID in ${file} is the database ${found.name}, and this deployment's is ${names.database}: the name follows from the file's name. Was ${file} copied from another deployment's file? A file for another deployment starts from ${LOCAL_EXAMPLE}: copy that over ${file} and put its two hostnames back in.`,
+      )
+    }
+    database = `as in ${file}`
+  } else {
+    existing = databases.find(({ name }) => name === names.database)?.uuid
+    database = existing ? 'one the account already has, used as it is' : 'to be created'
+  }
+  const width = Math.max(names.ui.length, names.ingest.length, names.database.length)
+  shell.log(`${file}:`)
+  shell.log(`  ${names.ui.padEnd(width)}  the UI, at ${domains.uiDomain}`)
+  shell.log(`  ${names.ingest.padEnd(width)}  the receiver, at ${domains.ingestDomain}`)
+  shell.log(`  ${names.database.padEnd(width)}  the database, ${database}`)
   const answer = shell.ask(`Logged in as ${login.email}. Set up httpdog-house in "${target.name}"? (y/n): `)
   if (answer === null) throw new SetupError('There is no terminal to confirm the account on, so nothing was done. Run `make setup` in a terminal.')
   if (!/^y(es)?$/i.test(answer.trim())) {
@@ -181,39 +252,34 @@ export async function setup(shell: Shell): Promise<{ ui: string; receiver: strin
   // unless the file has one already, before anything is uploaded: no deploy goes on without it
   if (!values().ENTRY_PATH) {
     set('ENTRY_PATH', newEntryPath())
-    shell.log(`noted a new entry path in ${LOCAL}: the UI will answer "not found" everywhere but there`)
+    shell.log(`noted a new entry path in ${file}: the UI will answer "not found" everywhere but there`)
   } else if (!isEntryPath(values().ENTRY_PATH)) {
-    throw new SetupError(`ENTRY_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
+    throw new SetupError(`ENTRY_PATH in ${file} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
   }
   // And the same for the receiver: the piece of its address that nobody would guess
   if (!values().INGEST_PATH) {
     set('INGEST_PATH', newEntryPath())
-    shell.log(`noted a new path for the receiver in ${LOCAL}: it will take alerts at that address and answer "not found" at every other`)
+    shell.log(`noted a new path for the receiver in ${file}: it will take alerts at that address and answer "not found" at every other`)
   } else if (!isEntryPath(values().INGEST_PATH)) {
-    throw new SetupError(`INGEST_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
+    throw new SetupError(`INGEST_PATH in ${file} must be 8 to 64 letters, digits, dashes and underscores. Empty it and \`make setup\` writes a new one.`)
   }
 
   say('Database')
-  if (values().DATABASE_ID) {
-    shell.log(`already in ${LOCAL}`)
+  if (noted) {
+    shell.log(`already in ${file}`)
   } else {
-    const name = databaseName(readSuffix(values()))
-    const list = async () => {
-      const result = await shell.capture([...WRANGLER, 'd1', 'list', '--json'])
-      if (result.code !== 0) throw new SetupError(`Could not list the databases of the account.\n${result.stderr.trim()}`)
-      return findDatabase(result.stdout, name)
-    }
-    let id = await list()
+    const name = names.database
+    let id = existing
     if (id) {
       shell.log(`using the database ${name} the account already has`)
     } else {
       // --update-config=false: wrangler would otherwise offer to write the id into wrangler.jsonc, which is committed
       await must([...WRANGLER, 'd1', 'create', name, '--update-config=false'], `Could not create the database ${name}. ${again}`)
-      id = await list()
+      id = (await listDatabases()).find((listed) => listed.name === name)?.uuid
     }
     if (!id) throw new SetupError(`The database ${name} was created but is not in the account's list yet. ${again}`)
     set('DATABASE_ID', id)
-    shell.log(`noted its id in ${LOCAL}`)
+    shell.log(`noted its id in ${file}`)
   }
 
   say('Tables')
@@ -315,12 +381,13 @@ export function terminal(): Shell {
     log: (line) => console.log(line),
     read: (path) => (existsSync(resolve(ROOT, path)) ? readFileSync(resolve(ROOT, path), 'utf8') : null),
     write: (path, text) => writeFileSync(resolve(ROOT, path), text),
+    files: () => readdirSync(ROOT),
   }
 }
 
 if (import.meta.main) {
   try {
-    const { ui, receiver } = await setup(terminal())
+    const { ui, receiver } = await setup(terminal(), LOCAL)
     console.log('\nDone.')
     console.log(`  Sign in:         ${ui}`)
     console.log(`  httpdog POSTs:   ${receiver}`)

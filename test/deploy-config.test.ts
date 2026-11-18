@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { applyValues, behindTheDoor, entryUrl, ingestUrl, leak, limiterNamespace, parseEnv, PLACEHOLDER, readDomains, readValues, type WranglerConfig } from '../scripts/deploy-config'
+import { applyValues, behindTheDoor, deploymentNames, entryUrl, ingestUrl, leak, limiterNamespace, otherDeployments, parseEnv, PLACEHOLDER, readDomains, readSuffix, readValues, sharedWith, suffixOf, type WranglerConfig } from '../scripts/deploy-config'
 
 const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
 /** What every deployment has to have: its two hostnames */
@@ -117,12 +117,39 @@ describe('the entry path', () => {
 })
 
 describe('a second deployment in one account', () => {
-  test('NAME_SUFFIX is a short lowercase name', () => {
-    expect(readValues({ ...FILE, NAME_SUFFIX: 'team-a' }).suffix).toBe('team-a')
-    expect(readValues({ ...FILE, NAME_SUFFIX: '' }).suffix).toBeUndefined()
-    for (const bad of ['Team', 'team_a', '-team', 'team-', 'a'.repeat(33)]) {
-      expect(() => readValues({ ...FILE, NAME_SUFFIX: bad })).toThrow('NAME_SUFFIX')
+  test("the suffix is the file's name: none for deploy.local.env, <name> for deploy.<name>.env", () => {
+    expect(suffixOf('deploy.local.env')).toBeUndefined()
+    expect(suffixOf('deploy.team-a.env')).toBe('team-a')
+    expect(suffixOf('/somewhere/else/deploy.team-a.env')).toBe('team-a')
+    expect(suffixOf(`deploy.${'a'.repeat(32)}.env`)).toBe('a'.repeat(32))
+    expect(readValues(FILE, 'deploy.team-a.env').suffix).toBe('team-a')
+    expect(readValues(FILE, 'deploy.local.env').suffix).toBeUndefined()
+  })
+
+  test('a file under another name is not a deployment, and a name that cannot go on the end of a Worker is refused', () => {
+    // a name of another shape is also one .gitignore does not keep out of the repository
+    for (const bad of ['team-a.env', 'deploy.local.env.example', 'deploy.env', 'deploy..env', '.env']) expect(() => suffixOf(bad)).toThrow("not the name of a deployment's file")
+    for (const bad of ['Team', 'team_a', '-team', 'team-', 'a.b', 'a'.repeat(33)]) expect(() => suffixOf(`deploy.${bad}.env`)).toThrow('1 to 32 of a-z, 0-9 and dash')
+    expect(() => readValues(FILE, 'deploy.Team.env')).toThrow('1 to 32')
+  })
+
+  test('a NAME_SUFFIX left in an older file is no longer read, and stops everything when the file name says otherwise', () => {
+    expect(readSuffix('deploy.team-a.env', { NAME_SUFFIX: 'team-a' })).toBe('team-a')
+    expect(readSuffix('deploy.local.env', { NAME_SUFFIX: '' })).toBeUndefined()
+    // its Workers and database are named by it already: the name alone would make a new deployment beside them
+    expect(() => readSuffix('deploy.local.env', { NAME_SUFFIX: 'team-a' })).toThrow('rename the file deploy.team-a.env')
+    expect(() => readSuffix('deploy.team-b.env', { NAME_SUFFIX: 'team-a' })).toThrow('DEPLOY_ENV=deploy.team-a.env')
+    expect(() => readValues({ ...FILE, NAME_SUFFIX: 'team-a' }, 'deploy.local.env')).toThrow('NAME_SUFFIX=team-a')
+  })
+
+  test("the names said before a deployment is set up are the ones its configs get", () => {
+    for (const suffix of [undefined, 'team-a']) {
+      const values = { ...VALUES, suffix }
+      const ui = applyValues(template('wrangler.jsonc'), values, 'ui')
+      const ingest = applyValues(template('ingest/wrangler.jsonc'), values, 'ingest')
+      expect(deploymentNames(suffix)).toEqual({ ui: ui.name!, ingest: ingest.name!, database: ingest.d1_databases![0]!.database_name! })
     }
+    expect(deploymentNames('team-a')).toEqual({ ui: 'httpdog-house-ui-team-a', ingest: 'httpdog-house-ingest-team-a', database: 'httpdog-house-team-a' })
   })
 
   test('the suffix names both Workers, the database and the rate limiter apart', () => {
@@ -147,6 +174,36 @@ describe('a second deployment in one account', () => {
     expect(ui.name).toBe('httpdog-house-ui')
     expect(ui.d1_databases![0]!.database_name).toBe('httpdog-house')
     expect(ui.ratelimits).toEqual(template('wrangler.jsonc').ratelimits)
+  })
+})
+
+describe('two deployments in one checkout', () => {
+  const FIRST = { ...FILE }
+  const SECOND = { UI_DOMAIN: 'team-a.example.com', INGEST_DOMAIN: 'hook-a.example.com', DATABASE_ID: '11111111-2222-3333-4444-555555555555' }
+  const first = [{ file: 'deploy.local.env', env: FIRST }]
+
+  test('two that share nothing go on side by side', () => {
+    expect(sharedWith('deploy.team-a.env', SECOND, first)).toBeNull()
+    // nor does a file that has no database yet, nor one with the example's id
+    expect(sharedWith('deploy.team-a.env', { ...SECOND, DATABASE_ID: '' }, [{ file: 'deploy.team-b.env', env: { ...SECOND, UI_DOMAIN: 'b.example.com', INGEST_DOMAIN: 'hook-b.example.com', DATABASE_ID: '' } }])).toBeNull()
+    expect(sharedWith('deploy.team-a.env', { ...SECOND, DATABASE_ID: PLACEHOLDER }, [{ file: 'deploy.local.env', env: { ...FIRST, DATABASE_ID: PLACEHOLDER } }])).toBeNull()
+  })
+
+  test("a file copied from another deployment's is caught by its database, whichever of the two is read", () => {
+    const copied = { ...FIRST, UI_DOMAIN: 'team-a.example.com', INGEST_DOMAIN: 'hook-a.example.com' }
+    expect(sharedWith('deploy.team-a.env', copied, first)).toContain('deploy.team-a.env and deploy.local.env have the same DATABASE_ID')
+    expect(sharedWith('deploy.local.env', FIRST, [{ file: 'deploy.team-a.env', env: copied }])).toContain('Start that one again from deploy.local.env.example')
+  })
+
+  test('a hostname in two files is caught, whichever Worker each is for', () => {
+    expect(sharedWith('deploy.team-a.env', { ...SECOND, UI_DOMAIN: 'ALERTS.example.com' }, first)).toBe('alerts.example.com is in both deploy.team-a.env and deploy.local.env. Each deployment is served from two hostnames of its own')
+    expect(sharedWith('deploy.team-a.env', { ...SECOND, INGEST_DOMAIN: 'alerts.example.com' }, first)).toContain('alerts.example.com is in both')
+  })
+
+  test("the other deployments are the other deploy.<name>.env files, never this one or the example", () => {
+    const files: Record<string, string> = { 'deploy.local.env': 'UI_DOMAIN=alerts.example.com\n', 'deploy.team-a.env': 'UI_DOMAIN=team-a.example.com\n', 'deploy.local.env.example': '', 'README.md': '', '.dev.vars': '' }
+    const others = otherDeployments('deploy.team-a.env', Object.keys(files), (name) => files[name] ?? null)
+    expect(others).toEqual([{ file: 'deploy.local.env', env: { UI_DOMAIN: 'alerts.example.com' } }])
   })
 })
 

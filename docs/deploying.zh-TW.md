@@ -29,8 +29,8 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 | 步驟 | 做了什麼 |
 |---|---|
 | 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西。它會說明檔案裡要填什麼,以及裡面的 `ENTRY_PATH` 與 `INGEST_PATH` 是什麼:可以現在自己取,也可以留空讓 `make setup` 產生 |
-| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號、要用哪兩個主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup`。回答 yes 之後,如果 `deploy.local.env` 還沒有 `ENTRY_PATH` 與 `INGEST_PATH`,它會各寫入一個新的 |
-| 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它 |
+| 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號,列出要建立或使用的兩個 Worker 與資料庫,以及它們的主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup`。回答 yes 之後,如果 `deploy.local.env` 還沒有 `ENTRY_PATH` 與 `INGEST_PATH`,它會各寫入一個新的 |
+| 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它。檔案裡已經有 `DATABASE_ID` 時,它必須就是這個資料庫:這在步驟 1 詢問之前就會確認 |
 | 3. 資料表 | 套用 `migrations/`。wrangler 會先問你要不要繼續 |
 | 4. 接收端 | 把 ingest Worker 上傳到 `INGEST_DOMAIN`。Cloudflare 會建立這個主機名稱的 DNS 紀錄與憑證 |
 | 5. 介面 | build 並把 UI Worker 上傳到 `UI_DOMAIN`,做法相同 |
@@ -85,22 +85,36 @@ https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts
 | `DATABASE_ID` | D1 資料庫的 id。由 `make setup` 填入 |
 | `ENTRY_PATH` | 登入網址的最後一段,見上方。由 `make setup` 填入,除非你自己設定了 |
 | `INGEST_PATH` | 接收端網址裡 `/alerts` 前面的那一段,見上方。由 `make setup` 填入,除非你自己設定了 |
-| `NAME_SUFFIX` | 只有在同一個帳號放另一套部署時才需要,見下方 |
 | `RETENTION_DAYS`、`MAX_SKEW_SECS` | 接收端的設定,見下方 |
 
 Git 會忽略這個檔案。兩個 `wrangler.jsonc` 有進版本控制,裡面一直是範例值;部署指令會把你的值寫進產生出來的設定檔(`wrangler.deploy.json`、`ingest/wrangler.deploy.json` 與 `.output/server/wrangler.json`),這些檔案 Git 也會忽略。如果有人把真的 id、網址或 route 寫進有進版本控制的設定檔,`make check-config` 會擋下部署。所以公開的 fork 不帶任何人的部署資料,你也可以從同一份 checkout 部署與 push。Secret 從來不在會進版本控制的檔案裡:`SECRETS_KEY` 是 Cloudflare secret,在本機則放在 `.dev.vars`。
 
 ## 同一個帳號放多套部署
 
-每一套部署有自己的檔案與自己的名稱:
+一套部署就是一個檔案,檔名就是這套部署的名字。`deploy.local.env` 是第一套,用不帶後綴的名稱。其他的叫 `deploy.<名字>.env`,`<名字>` 會加在它在帳號裡每個東西的名稱後面:
+
+| 檔案 | Worker | 資料庫 |
+|---|---|---|
+| `deploy.local.env` | `httpdog-house-ui`、`httpdog-house-ingest` | `httpdog-house` |
+| `deploy.team-a.env` | `httpdog-house-ui-team-a`、`httpdog-house-ingest-team-a` | `httpdog-house-team-a` |
+
+所以資料庫是靠你替檔案取的名字區分的。名字是 1 到 32 個 a-z、0-9 與減號。
 
 ```bash
-cp deploy.local.env.example deploy.team-a.env    # 然後在裡面設定 NAME_SUFFIX=team-a 和它自己的兩個主機名稱
-make setup  DEPLOY_ENV=deploy.team-a.env
-make deploy DEPLOY_ENV=deploy.team-a.env         # 之後更新時使用
+make setup  DEPLOY_ENV=deploy.team-a.env    # 第一次會寫出這個檔案:填好它自己的兩個主機名稱,再跑一次
+make deploy DEPLOY_ENV=deploy.team-a.env    # 之後更新時使用
 ```
 
-這樣兩個 Worker 會叫 `httpdog-house-ui-team-a` 與 `httpdog-house-ingest-team-a`,資料庫叫 `httpdog-house-team-a`,登入的 rate limiter 也會有自己的編號。各套部署之間不共用任何東西:主機名稱、`SECRETS_KEY`、帳號、金鑰與告警都是各自一份。每個會連到 Cloudflare 的指令都會先印出它讀的是哪個檔案、要動的是哪兩個 Worker。不指定 `DEPLOY_ENV` 時讀的是 `deploy.local.env`;沒有設定 `NAME_SUFFIX` 時用的是不帶後綴的名稱。後綴要在第一次 `make setup` 之前設好,之後不要改:換後綴等於另一套新的部署。Git 會忽略所有 `deploy.*.env`。
+- **這套部署的每個指令都要指定它的檔案。** 不指定 `DEPLOY_ENV` 時讀的是 `deploy.local.env`。`make setup` 在請你回答 yes 之前,會列出要建立或使用的兩個 Worker 與資料庫;其他會連到 Cloudflare 的指令,也都會先印出讀的是哪個檔案、要動的是哪兩個 Worker。
+- **不要改檔名。** 換了名字就是另一套部署,會有新的 Worker 與新的資料庫。
+- **從範例開始寫這個檔案**(`make setup` 就是這樣做的),不要複製另一套部署的檔案:那個檔案裡的 `DATABASE_ID` 是那一套的資料庫。checkout 裡有另一個檔案的 `DATABASE_ID` 相同,或用了同一個主機名稱時,這套部署的指令都會停下來;檔案裡的 `DATABASE_ID` 不是檔名對應的資料庫時,`make setup` 也會停下來。
+- **各套之間不共用任何東西**:主機名稱、`SECRETS_KEY`、登入的 rate limiter、帳號、金鑰與告警都是各自一份。Git 會忽略所有 `deploy.*.env`。
+
+把 checkout 裡的每一套部署都更新到最新:
+
+```bash
+git pull && for f in deploy.*.env; do make deploy DEPLOY_ENV=$f || break; done
+```
 
 ## 接收端的設定
 

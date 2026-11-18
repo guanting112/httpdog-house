@@ -4,9 +4,20 @@ Notable changes in each version. A version is a tag on `main`, such as `v0.1.0`,
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-19
+
+The deployed Workers behave the same as in 0.1.2. Another deployment in the same account is now named by its file instead of by `NAME_SUFFIX`, hence 0.2.0: a file whose `NAME_SUFFIX` is not its name stops until it is renamed. A single deployment in `deploy.local.env` goes on as before.
+
 ### Added
 
 - A GitHub release comes with the source of its tag, `httpdog-house-vX.Y.Z.tar.gz`, and a signed record that this repository's `release.yml` made it from that tag. Check a downloaded archive with `gh attestation verify httpdog-house-vX.Y.Z.tar.gz -R guanting112/httpdog-house`.
+
+### Changed
+
+- Another deployment in the same account is named by its file: `make setup DEPLOY_ENV=deploy.team-a.env` makes the Workers `httpdog-house-ui-team-a` and `httpdog-house-ingest-team-a` and the database `httpdog-house-team-a`. `NAME_SUFFIX` is no longer read. A file whose `NAME_SUFFIX` matches its name goes on as before, and the line can go; a file whose `NAME_SUFFIX` does not stops every command and says what to rename it to. `deploy.local.env` keeps the plain names.
+- The file `DEPLOY_ENV` names has to be `deploy.local.env` or `deploy.<name>.env`, the names Git ignores.
+- `make setup` lists the two Workers and the database it is about to make or use before it asks for the yes, and stops there when the `DATABASE_ID` in the file is not that database, or not one of the account's.
+- The commands of a deployment stop when another `deploy.*.env` in the checkout has the same `DATABASE_ID` or one of its hostnames. A file copied from another deployment's would otherwise put a second pair of Workers on that deployment's database.
 
 ### Documentation
 
@@ -48,7 +59,8 @@ The first numbered release.
 - **More than one deployment in an account**, each from an env file of its own.
 - **Retention.** Alerts are kept 365 days by default; `RETENTION_DAYS` changes it.
 
-[Unreleased]: https://github.com/guanting112/httpdog-house/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/guanting112/httpdog-house/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/guanting112/httpdog-house/releases/tag/v0.2.0
 [0.1.2]: https://github.com/guanting112/httpdog-house/releases/tag/v0.1.2
 [0.1.1]: https://github.com/guanting112/httpdog-house/releases/tag/v0.1.1
 [0.1.0]: https://github.com/guanting112/httpdog-house/releases/tag/v0.1.0
