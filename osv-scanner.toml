@@ -1,0 +1,31 @@
+# Advisories that OSV-Scanner reports for bun.lock but that do not apply to it. OpenSSF
+# Scorecard's Vulnerabilities check runs OSV-Scanner, which reads this file.
+#
+# Each of these Nuxt advisories also lists the 3.x line as affected (">= 3.0.0, < 4.0.0", no
+# patched version). In the OSV records that "< 4.0.0" is kept only in
+# database_specific.last_known_affected_version_range, so the 3.x range has no upper bound and
+# every version from 3.0.0 on counts as affected, 4.6.4 included. The 4.x range of each record
+# ends at a fix bun.lock already has: nuxt and @nuxt/nitro-server are at 4.6.4.
+#
+# After ignoreUntil an entry no longer applies and the advisory is reported again. Take an entry
+# out when the OSV record gives the 3.x range an upper bound.
+
+[[IgnoredVulns]]
+id = "GHSA-f3x9-2chm-73c8"
+ignoreUntil = 2027-02-01
+reason = "Fixed in nuxt and @nuxt/nitro-server 4.6.4, which bun.lock has; OSV leaves the 3.x range without an upper bound"
+
+[[IgnoredVulns]]
+id = "GHSA-hf59-9xwc-2g4p"
+ignoreUntil = 2027-02-01
+reason = "Fixed in nuxt and @nuxt/nitro-server 4.6.4, which bun.lock has; OSV leaves the 3.x range without an upper bound"
+
+[[IgnoredVulns]]
+id = "GHSA-vjh5-4x84-xrqp"
+ignoreUntil = 2027-02-01
+reason = "Fixed in nuxt and @nuxt/nitro-server 4.6.2; bun.lock has 4.6.4; OSV leaves the 3.x range without an upper bound"
+
+[[IgnoredVulns]]
+id = "GHSA-96x6-fvhx-49hg"
+ignoreUntil = 2027-02-01
+reason = "Fixed in nuxt 4.6.4, which bun.lock has; OSV leaves the 3.x range without an upper bound"
