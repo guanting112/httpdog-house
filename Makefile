@@ -33,7 +33,7 @@ INGEST_CONFIG := ingest/wrangler.jsonc
 # Your values, and the two configs generated from them: the real names and the real database.
 # Everything that reaches Cloudflare reads those, never the two files above.
 # One file is one deployment. For another one in the same account:
-#   make <target> DEPLOY_ENV=deploy.<suffix>.env      (see NAME_SUFFIX in deploy.local.env.example)
+#   make <target> DEPLOY_ENV=deploy.<name>.env      its Workers and its database end in -<name>
 DEPLOY_ENV    ?= deploy.local.env
 export DEPLOY_ENV
 UI_DEPLOY     := wrangler.deploy.json
@@ -57,7 +57,7 @@ help: ## List every target
 ##@ Deploy to Cloudflare
 
 # setup is safe to run again: each step looks at what is there and does only what is missing
-# (scripts/setup.ts). With DEPLOY_ENV=deploy.<suffix>.env it sets up another deployment
+# (scripts/setup.ts). With DEPLOY_ENV=deploy.<name>.env it sets up another deployment
 .PHONY: setup deploy entry
 setup: install ## The first time: log in, create the database, upload both Workers, set their key, make an admin
 	@$(BUN) scripts/setup.ts
@@ -146,8 +146,9 @@ whoami: ## Show which Cloudflare account is logged in
 
 # --update-config=false: wrangler would otherwise offer to write the id into wrangler.jsonc, which is committed
 db-create: ## Create the D1 database; put the id it prints in deploy.local.env
-	@[ -f $(DEPLOY_ENV) ] || { cp deploy.local.env.example $(DEPLOY_ENV); echo "wrote $(DEPLOY_ENV)"; }
-	@name=$$($(DEPLOY_CONFIG) database-name) || exit 1; $(WRANGLER) d1 create "$$name" --update-config=false
+	@name=$$($(DEPLOY_CONFIG) database-name) || exit 1; \
+	  [ -f $(DEPLOY_ENV) ] || { cp deploy.local.env.example $(DEPLOY_ENV); echo "wrote $(DEPLOY_ENV)"; }; \
+	  $(WRANGLER) d1 create "$$name" --update-config=false
 	@echo
 	@echo "  Put that database_id in $(DEPLOY_ENV) as DATABASE_ID. That file is not committed;"
 	@echo "  leave the example id in $(UI_CONFIG) and $(INGEST_CONFIG) as it is."

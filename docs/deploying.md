@@ -29,8 +29,8 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 | Step | What happens |
 |---|---|
 | Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created. It says what to put in the file, and what `ENTRY_PATH` and `INGEST_PATH` in it are, each yours to choose now or left for `make setup` to make |
-| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` and a new `INGEST_PATH` in `deploy.local.env`, unless they are there |
-| 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
+| 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in and which account that is, lists the two Workers and the database it is about to make or use, with their hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` and a new `INGEST_PATH` in `deploy.local.env`, unless they are there |
+| 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is. A `DATABASE_ID` already in the file has to be that database: that is checked before the question in step 1 |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |
 | 4. Receiver | Uploads the ingest Worker at `INGEST_DOMAIN`. Cloudflare makes the hostname's DNS record and certificate |
 | 5. UI | Builds and uploads the UI Worker at `UI_DOMAIN`, the same way |
@@ -85,22 +85,36 @@ The one place for what differs from one deployment to the next:
 | `DATABASE_ID` | The id of the D1 database. Filled in by `make setup` |
 | `ENTRY_PATH` | The last piece of the sign-in address, see above. Filled in by `make setup` unless you set one |
 | `INGEST_PATH` | The piece of the receiver's address before `/alerts`, see above. Filled in by `make setup` unless you set one |
-| `NAME_SUFFIX` | Only for another deployment in the same account, see below |
 | `RETENTION_DAYS`, `MAX_SKEW_SECS` | Settings of the receiver, see below |
 
 Git ignores the file. The two `wrangler.jsonc` files are committed and keep example values; the deploy targets put your values into generated configs (`wrangler.deploy.json`, `ingest/wrangler.deploy.json` and `.output/server/wrangler.json`), which Git ignores too, and `make check-config` stops a deploy when a real id, address or route has been written into a committed config. So a public fork carries nobody's deployment, and you can deploy from the checkout you push from. Secrets were never in a committed file: `SECRETS_KEY` is a Cloudflare secret, and locally it is in `.dev.vars`.
 
 ## More than one deployment in an account
 
-Each deployment has a file and names of its own:
+A deployment is one file, and the file's name is the deployment's name. `deploy.local.env` is the first one, with the plain names. Another one is `deploy.<name>.env`, and its `<name>` goes on the end of everything it has in the account:
+
+| File | Workers | Database |
+|---|---|---|
+| `deploy.local.env` | `httpdog-house-ui`, `httpdog-house-ingest` | `httpdog-house` |
+| `deploy.team-a.env` | `httpdog-house-ui-team-a`, `httpdog-house-ingest-team-a` | `httpdog-house-team-a` |
+
+So the name you give the file is what tells its database apart. It is 1 to 32 of a-z, 0-9 and dash.
 
 ```bash
-cp deploy.local.env.example deploy.team-a.env    # then set NAME_SUFFIX=team-a and two hostnames of its own in it
-make setup  DEPLOY_ENV=deploy.team-a.env
-make deploy DEPLOY_ENV=deploy.team-a.env         # later, to update it
+make setup  DEPLOY_ENV=deploy.team-a.env    # the first time, it writes the file: put two hostnames of its own in it, then run it again
+make deploy DEPLOY_ENV=deploy.team-a.env    # later, to update it
 ```
 
-The Workers are then `httpdog-house-ui-team-a` and `httpdog-house-ingest-team-a`, the database is `httpdog-house-team-a`, and the sign-in rate limiter gets a number of its own. Nothing is shared between deployments: each has its own hostnames, `SECRETS_KEY`, accounts, keys and alerts. Every command that reaches Cloudflare first says which file it read and which Workers it is about to act on. Without `DEPLOY_ENV` the file is `deploy.local.env`, and with no `NAME_SUFFIX` the names are the plain ones. Set the suffix before the first `make setup` and leave it: a new suffix is a new deployment. Files named `deploy.*.env` are ignored by Git.
+- **Name the file on every command for it.** Without `DEPLOY_ENV` the file is `deploy.local.env`. Before it asks for the yes, `make setup` lists the two Workers and the database it is about to make or use; every other command that reaches Cloudflare first says which file it read and which Workers it is about to act on.
+- **Keep the file's name.** Under another name it is another deployment, with new Workers and a new database.
+- **Start the file from the example**, as `make setup` does, never from another deployment's file: the `DATABASE_ID` in that one is that deployment's database. The commands of a deployment stop when another file in the checkout has the same `DATABASE_ID` or one of its hostnames, and `make setup` stops when the `DATABASE_ID` in the file is not the database the file's name gives.
+- **Nothing is shared**: each has its own hostnames, `SECRETS_KEY`, sign-in rate limiter, accounts, keys and alerts. Git ignores every `deploy.*.env`.
+
+To bring every deployment in the checkout up to date:
+
+```bash
+git pull && for f in deploy.*.env; do make deploy DEPLOY_ENV=$f || break; done
+```
 
 ## Settings of the receiver
 

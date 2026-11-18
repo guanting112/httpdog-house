@@ -15,7 +15,8 @@ import fc from 'fast-check'
 import { highlight, type Lang } from '../app/lib/highlight'
 import { printable } from '../app/lib/format'
 import { BUCKET_SIZE, bucket, type Env, handleRequest } from '../ingest/src/receiver'
-import { parseEnv } from '../scripts/deploy-config'
+import { basename } from 'node:path'
+import { deploymentNames, parseEnv, PLACEHOLDER, sharedWith, suffixOf } from '../scripts/deploy-config'
 import { setEnvValue } from '../scripts/setup'
 import { door, doorToken, isEntryPath } from '../shared/door'
 import { fromBase64, fromHex, openSecret, randomBytes, sealSecret, secretFingerprint, signAlert, toBase64, toHex, utf8, verifyAlert } from '../shared/crypto'
@@ -439,6 +440,8 @@ describe('fuzz: text shown on a page', () => {
 
 describe('fuzz: deploy.local.env', () => {
   const key = fc.constantFrom('DATABASE_ID', 'INGEST_URL', 'UI_DOMAIN', 'NAME_SUFFIX', 'RETENTION_DAYS')
+  /** What a Worker may be called */
+  const WORKER_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
   // a value as setup writes one: a single line
   const value = messy.map((text) => text.replace(/\n/g, ''))
   const line = fc.oneof(fc.constant(''), messy.map((text) => `# ${text.replace(/\n/g, ' ')}`), fc.tuple(key, value).map(([k, v]) => `${k}=${v}`))
@@ -451,6 +454,41 @@ describe('fuzz: deploy.local.env', () => {
         const after = parseEnv(setEnvValue(text, name, written))
         expect(after[name]).toBe(parseEnv(`${name}=${written}`)[name]!)
         for (const other of Object.keys(before)) if (other !== name) expect(after[other]).toBe(before[other]!)
+      }),
+    )
+  })
+
+  test("a file's name is a deployment's, whose names are ones a Worker may have, or it is refused", () => {
+    const piece = fc.string({ unit: fc.constantFrom('a', 'z', '0', '9', '-', '_', '.', 'A', '/', ' ', 'é'), maxLength: 40 })
+    const file = fc.oneof(messy, fc.constant('deploy.local.env'), piece.map((name) => `deploy.${name}.env`), fc.tuple(piece, piece).map(([dir, name]) => `${dir}/deploy.${name}.env`))
+    fc.assert(
+      fc.property(file, (name) => {
+        let suffix: string | undefined
+        try {
+          suffix = suffixOf(name)
+        } catch {
+          return
+        }
+        // the deployment is the file: deploy.local.env, or deploy.<suffix>.env, which .gitignore covers
+        expect(basename(name)).toBe(`deploy.${suffix ?? 'local'}.env`)
+        if (suffix !== undefined) for (const named of Object.values(deploymentNames(suffix))) expect(named).toMatch(WORKER_NAME)
+      }),
+    )
+  })
+
+  test("whether two deployments' files can stand side by side does not depend on which is read, and a shared database never can", () => {
+    const pick = (...values: string[]) => fc.oneof(fc.constantFrom(...values), messy.map((text) => text.replace(/\n/g, '')))
+    const env = fc.record({
+      UI_DOMAIN: pick('', 'a.example.com', 'A.example.com', 'b.example.com'),
+      INGEST_DOMAIN: pick('', 'b.example.com', 'c.example.com'),
+      DATABASE_ID: pick('', PLACEHOLDER, '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0', '11111111-2222-3333-4444-555555555555'),
+    })
+    fc.assert(
+      fc.property(env, env, (one, two) => {
+        const fromOne = sharedWith('deploy.one.env', one, [{ file: 'deploy.two.env', env: two }])
+        const fromTwo = sharedWith('deploy.two.env', two, [{ file: 'deploy.one.env', env: one }])
+        expect(fromOne === null).toBe(fromTwo === null)
+        if (one.DATABASE_ID && one.DATABASE_ID !== PLACEHOLDER && one.DATABASE_ID === two.DATABASE_ID) expect(fromOne).not.toBeNull()
       }),
     )
   })

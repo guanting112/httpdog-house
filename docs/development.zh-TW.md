@@ -84,7 +84,7 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 - 用 headless Chrome 對 build 後的介面測試,HTTP 與 HTTPS 都跑過:登入、新告警即時出現、篩選、金鑰的建立、編輯、停用與刪除(每一步之後都檢查接收端的回應)、viewer 被擋在管理頁面與管理 API 之外、變更密碼,以及兩種語言、兩種主題在桌機與手機寬度下的頁面。
 - 門與接收端的路徑(兩個路徑都有設定):回應和下面在 Cloudflare 上看到的相同,另外還確認了偽造的 cookie 和另一個入口路徑的 cookie 會被擋下、檔案帶著原本的快取標頭且條件式請求得到 `304`,以及沒有簽章的 `POST` 得到 `401`。
 - 用假的 wrangler 與假的 make,在 pseudo-terminal 裡把 `make setup` 從頭跑到尾:第一次執行、第二次執行(發現一切都已就緒),以及沒有終端機可以詢問的情況。
-- 用幾份虛構的 `deploy.*.env`(其中一份有 `NAME_SUFFIX`)產生設定檔,`wrangler deploy --dry-run` 都接受。
+- 用幾份虛構的 `deploy.*.env`(其中一份是第二套部署,名稱帶後綴)產生設定檔,`wrangler deploy --dry-run` 都接受。
 
 **在 Cloudflare 上**(一個帳號,付費的 Workers 方案)
 
@@ -92,4 +92,4 @@ HTTPDOG_WEBHOOK_URL=http://127.0.0.1:8788/alerts HTTPDOG_WEBHOOK_SECRET=<那組 
 - 從外面看門:沒有 cookie 時,`/`、`/login`、API、`/favicon.svg` 和錯的入口路徑得到的都是完全相同的 `404 not found`。入口網址回的是導向 `/login` 的重新導向,以及一個 `HttpOnly`、`Secure` 的 cookie;帶著它之後,頁面、API 與檔案都會回應。
 - 從外面看接收端:`/`、`/alerts`、`/health` 和錯的路徑都回 `404 not found`;在它的位址上,`/health` 回 `200`、`GET` 回 `405`。
 - 唯一的例外是 `/robots.txt`:這個網域有 Cloudflare 自己提供的 robots.txt,所以陌生人在兩個主機名稱上拿到的是它,不是 `not found`。見[登入網址](deploying.zh-TW.md#登入網址)。
-- **沒有驗證**:免費方案(登入需要的 CPU 時間)、登入的速率限制、每日清理,以及帶 `NAME_SUFFIX` 的第二套部署。
+- **沒有驗證**:免費方案(登入需要的 CPU 時間)、登入的速率限制、每日清理,以及第二套部署(`deploy.<名字>.env`)。

@@ -13,15 +13,16 @@
 //   bun scripts/deploy-config.ts database-name   print the name to create the database with
 //   bun scripts/deploy-config.ts entry           print the two addresses: to sign in at, and for httpdog to send to
 //
-// One file is one deployment. A second deployment in the same Cloudflare account has a file of its
-// own with a NAME_SUFFIX, which names its two Workers and its database apart from the first's;
-// DEPLOY_ENV in the environment says which file to read (the Makefile passes it on).
+// One file is one deployment, and the file's name is the deployment's name: deploy.local.env has
+// the plain names, and deploy.<name>.env, another deployment in the same Cloudflare account, has
+// <name> on the end of the names of its two Workers and its database. DEPLOY_ENV in the environment
+// says which file to read (the Makefile passes it on).
 //
 // The Makefile runs these; nothing here uploads anything. On a first deployment scripts/setup.ts
 // fills in the rest of the file, once the two hostnames are in it.
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, resolve } from 'node:path'
 import { isEntryPath } from '../shared/door'
 
 /** The database_id both committed configs ship with */
@@ -86,11 +87,37 @@ export function parseEnv(text: string): Record<string, string> {
 const UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 /** Short enough that the longer Worker name stays within the 63 characters a Worker's name may have */
 const SUFFIX = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/
+/** What a deployment's file is called. Every such name is one .gitignore keeps out of the repository */
+const DEPLOY_FILE = /^deploy\.(.+)\.env$/
 
-/** NAME_SUFFIX, checked. Read on its own before the database exists (scripts/setup.ts) */
-export function readSuffix(env: Record<string, string>): string | undefined {
-  const suffix = env.NAME_SUFFIX || undefined
-  if (suffix && !SUFFIX.test(suffix)) throw new Error(`NAME_SUFFIX in ${LOCAL} is 1 to 32 of a-z, 0-9 and dash, not starting or ending with a dash`)
+/** Whether this is the name of a deployment's file, deploy.<something>.env, wherever it is */
+export const isDeployFile = (file: string) => DEPLOY_FILE.test(basename(file))
+
+/**
+ * The suffix of a deployment, from its file's name: none for deploy.local.env, <name> for
+ * deploy.<name>.env. It goes on the end of the names of both Workers and the database, which is
+ * what tells two deployments in one account apart. Taken from the name, there is nothing else to
+ * keep in step with it; a file under another name is another deployment.
+ */
+export function suffixOf(file: string): string | undefined {
+  const name = DEPLOY_FILE.exec(basename(file))?.[1]
+  if (name === undefined) throw new Error(`${file} is not the name of a deployment's file. The first deployment's is deploy.local.env; another one in the same account has deploy.<name>.env, such as deploy.team-a.env`)
+  if (name === 'local') return undefined
+  if (!SUFFIX.test(name)) throw new Error(`In ${basename(file)}, "${name}" goes on the end of the names of the deployment's Workers and database, so it is 1 to 32 of a-z, 0-9 and dash, not starting or ending with a dash`)
+  return name
+}
+
+/**
+ * The suffix, and the file agrees with it. NAME_SUFFIX was where it was set before the file's name
+ * gave it: a file whose NAME_SUFFIX says otherwise has Workers and a database by that name already,
+ * and reading the name alone would quietly make a new deployment beside them.
+ */
+export function readSuffix(file: string, env: Record<string, string>): string | undefined {
+  const suffix = suffixOf(file)
+  const said = env.NAME_SUFFIX || undefined
+  if (said !== undefined && said !== suffix) {
+    throw new Error(`NAME_SUFFIX=${said} in ${file} is no longer read: the file's name gives the suffix now. This deployment's Workers and database end in -${said}, so rename the file deploy.${said}.env, name that on every command (DEPLOY_ENV=deploy.${said}.env), and take out the NAME_SUFFIX line`)
+  }
   return suffix
 }
 
@@ -140,31 +167,31 @@ export const ingestUrl = (values: { ingestDomain: string; ingestPath: string }) 
 /** Where a person goes to sign in: the one address of the UI that answers a browser it has not seen */
 export const entryUrl = (values: { uiDomain: string; entryPath: string }) => `https://${values.uiDomain}/${values.entryPath}`
 
-/** The values of deploy.local.env, checked. Throws with a message meant for the terminal */
-export function readValues(env: Record<string, string>): DeployValues {
-  const suffix = readSuffix(env)
+/** The values of a deployment's file, checked. Throws with a message meant for the terminal */
+export function readValues(env: Record<string, string>, file = LOCAL): DeployValues {
+  const suffix = readSuffix(file, env)
   // the hostnames first: they are what a person has to decide, the rest setup fills in
   const { uiDomain, ingestDomain } = readDomains(env)
   const databaseId = env.DATABASE_ID ?? ''
-  if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${LOCAL}. For a first deployment, run \`make setup\`: it creates the database and fills it in`)
-  if (!UUID.test(databaseId)) throw new Error(`DATABASE_ID in ${LOCAL} does not look like a D1 database id`)
+  if (!databaseId || databaseId === PLACEHOLDER) throw new Error(`DATABASE_ID is not set in ${file}. For a first deployment, run \`make setup\`: it creates the database and fills it in`)
+  if (!UUID.test(databaseId)) throw new Error(`DATABASE_ID in ${file} does not look like a D1 database id`)
 
   // Without it the UI would answer at its bare hostname, to anyone who comes across the name
   const entryPath = env.ENTRY_PATH ?? ''
-  if (!entryPath) throw new Error(`ENTRY_PATH is not set in ${LOCAL}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess`)
-  if (!isEntryPath(entryPath)) throw new Error(`ENTRY_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<UI_DOMAIN>/<ENTRY_PATH>`)
+  if (!entryPath) throw new Error(`ENTRY_PATH is not set in ${file}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess`)
+  if (!isEntryPath(entryPath)) throw new Error(`ENTRY_PATH in ${file} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<UI_DOMAIN>/<ENTRY_PATH>`)
 
   // The same for the receiver, which would otherwise take requests from anyone at /alerts
   const ingestPath = env.INGEST_PATH ?? ''
-  if (!ingestPath) throw new Error(`INGEST_PATH is not set in ${LOCAL}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess. Hosts that already send alerts need the new address afterwards`)
-  if (!isEntryPath(ingestPath)) throw new Error(`INGEST_PATH in ${LOCAL} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts`)
+  if (!ingestPath) throw new Error(`INGEST_PATH is not set in ${file}. \`make setup\` writes a new one and carries on from where a deployment is; or put a name of your own there that nobody would guess. Hosts that already send alerts need the new address afterwards`)
+  if (!isEntryPath(ingestPath)) throw new Error(`INGEST_PATH in ${file} must be 8 to 64 letters, digits, dashes and underscores: it is one piece of an address, https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts`)
 
   // The receiver falls back to its default for a setting it cannot read, which would hide a typing
   // mistake until alerts were deleted sooner or later than meant. So a mistake stops the deploy here
   const wholeNumber = (name: 'RETENTION_DAYS' | 'MAX_SKEW_SECS', least: number, meaning: string) => {
     const value = env[name]
     if (!value) return undefined
-    if (!/^\d{1,9}$/.test(value) || Number(value) < least) throw new Error(`${name} in ${LOCAL} must be a whole number of ${least} or more: ${meaning}`)
+    if (!/^\d{1,9}$/.test(value) || Number(value) < least) throw new Error(`${name} in ${file} must be a whole number of ${least} or more: ${meaning}`)
     return String(Number(value))
   }
   const retentionDays = wholeNumber('RETENTION_DAYS', 0, 'the days an alert is kept, or 0 to keep alerts forever')
@@ -221,6 +248,33 @@ export function behindTheDoor(built: WranglerConfig): WranglerConfig {
   return { ...built, assets: { ...built.assets, binding: FILES_BINDING } }
 }
 
+/**
+ * Why this deployment's file cannot go on beside another deployment's file, or null when it can.
+ * A file copied from another deployment's, instead of from the example, carries that deployment's
+ * database: two pairs of Workers on one database share its accounts and alerts, and each pair's
+ * SECRETS_KEY cannot read the signing keys the other stored. Which of the two is the copy cannot be
+ * told from here, so the reason names both.
+ */
+export function sharedWith(file: string, env: Record<string, string>, others: { file: string; env: Record<string, string> }[]): string | null {
+  const hostnames = (values: Record<string, string>) => [values.UI_DOMAIN, values.INGEST_DOMAIN].filter((name): name is string => !!name).map((name) => name.toLowerCase())
+  const id = env.DATABASE_ID
+  const ours = hostnames(env)
+  for (const other of others) {
+    if (id && id !== PLACEHOLDER && other.env.DATABASE_ID === id) {
+      return `${file} and ${other.file} have the same DATABASE_ID: two deployments on one database would share its accounts, keys and alerts. One of the two files was copied from the other. Start that one again from ${LOCAL_EXAMPLE} and put its two hostnames back in; \`make setup\` then makes it a database of its own`
+    }
+    const both = ours.find((name) => hostnames(other.env).includes(name))
+    if (both) return `${both} is in both ${file} and ${other.file}. Each deployment is served from two hostnames of its own`
+  }
+  return null
+}
+
+/** The other deployments' files among these names, and what is in each */
+export function otherDeployments(file: string, names: string[], read: (name: string) => string | null): { file: string; env: Record<string, string> }[] {
+  const self = resolve(ROOT, file)
+  return names.filter((name) => isDeployFile(name) && resolve(ROOT, name) !== self).map((name) => ({ file: name, env: parseEnv(read(name) ?? '') }))
+}
+
 /** What makes a committed config no longer an example, or null when it still is one */
 export function leak(config: WranglerConfig): string | null {
   if ((config.d1_databases ?? []).some((database) => database.database_id !== PLACEHOLDER)) return 'a real database_id'
@@ -239,23 +293,39 @@ function readLocal(): Record<string, string> {
   return parseEnv(readFileSync(resolve(ROOT, LOCAL), 'utf8'))
 }
 
-/** The name a deployment's database is created with: the committed one, plus the suffix */
-export function databaseName(suffix: string | undefined): string {
-  return withSuffix(readTemplate(UI_TEMPLATE).d1_databases?.[0]?.database_name, suffix) ?? ''
+/** The names a deployment has in the account: the committed ones, plus the suffix */
+export function deploymentNames(suffix: string | undefined): { ui: string; ingest: string; database: string } {
+  const ui = readTemplate(UI_TEMPLATE)
+  return {
+    ui: withSuffix(ui.name, suffix) ?? '',
+    ingest: withSuffix(readTemplate(INGEST_TEMPLATE).name, suffix) ?? '',
+    database: withSuffix(ui.d1_databases?.[0]?.database_name, suffix) ?? '',
+  }
 }
+
+/** The name a deployment's database is created with: the committed one, plus the suffix */
+export const databaseName = (suffix: string | undefined) => deploymentNames(suffix).database
 
 function check(): DeployValues {
   for (const path of [UI_TEMPLATE, INGEST_TEMPLATE]) {
     const found = leak(readTemplate(path))
     if (found) throw new Error(`${path} has ${found}. That file is committed: move the value to ${LOCAL} and put the example back`)
   }
+  suffixOf(LOCAL)
   if (!existsSync(resolve(ROOT, LOCAL))) throw new Error(`${LOCAL} is missing. For a first deployment, run \`make setup\`: it writes the file and says what to put in it`)
-  return readValues(readLocal())
+  const env = readLocal()
+  const values = readValues(env)
+  const shared = sharedWith(LOCAL, env, otherDeployments(LOCAL, readdirSync(ROOT), (name) => readFileSync(resolve(ROOT, name), 'utf8')))
+  if (shared) throw new Error(shared)
+  return values
 }
 
 /** A line of an older file that is no longer read, said once so that it does not sit there misleading */
 function noteOldLines() {
-  if (readLocal().INGEST_URL) console.log(`note: INGEST_URL in ${LOCAL} is no longer read. The receiver's address is https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts; the line can go`)
+  const env = readLocal()
+  if (env.INGEST_URL) console.log(`note: INGEST_URL in ${LOCAL} is no longer read. The receiver's address is https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts; the line can go`)
+  // one that says what the file's name says (readSuffix stops at one that does not)
+  if (env.NAME_SUFFIX) console.log(`note: NAME_SUFFIX in ${LOCAL} is no longer read. The file's name gives the suffix; the line can go`)
 }
 
 function write(path: string, config: WranglerConfig) {
@@ -283,7 +353,7 @@ if (import.meta.main) {
       console.log(`sign in:        ${entryUrl(values)}`)
       console.log(`httpdog POSTs:  ${ingestUrl(values)}`)
     } else if (command === 'database-name') {
-      console.log(databaseName(existsSync(resolve(ROOT, LOCAL)) ? readSuffix(readLocal()) : undefined))
+      console.log(databaseName(readSuffix(LOCAL, existsSync(resolve(ROOT, LOCAL)) ? readLocal() : {})))
     } else if (command === 'built') {
       if (!existsSync(resolve(ROOT, UI_BUILT))) throw new Error(`${UI_BUILT} is missing: \`nuxt build\` has not run`)
       write(UI_BUILT, behindTheDoor(JSON.parse(readFileSync(resolve(ROOT, UI_BUILT), 'utf8')) as WranglerConfig))

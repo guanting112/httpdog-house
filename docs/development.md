@@ -84,7 +84,7 @@ Notes for whoever edits it:
 - In headless Chrome against the built UI, over HTTP and HTTPS: sign-in, live arrival of an alert, filters, making, editing, disabling and deleting a key with the receiver's answer checked after each step, a viewer kept out of admin pages and admin API calls, changing a password, and the pages in both languages and both themes at desktop and phone widths.
 - The door and the receiver's path, with both paths set: the same answers as on Cloudflare below, and also a forged cookie and the cookie of another entry path turned away, files answered with their cache headers and a `304` to a conditional request, and an unsigned `POST` answered `401`.
 - `make setup` end to end with stand-ins for wrangler and make, typed into a pseudo-terminal: a first run, a second run that finds everything in place, and a run with no terminal to ask on.
-- `wrangler deploy --dry-run` accepted the configs generated from invented `deploy.*.env` files, one of them with a `NAME_SUFFIX`.
+- `wrangler deploy --dry-run` accepted the configs generated from invented `deploy.*.env` files, one of them for a second deployment, with a suffix on its names.
 
 **On Cloudflare** (one account, the paid Workers plan)
 
@@ -92,4 +92,4 @@ Notes for whoever edits it:
 - The door, from outside: without the cookie, `/`, `/login`, an API call, `/favicon.svg` and a wrong entry path all got the same `404 not found`, byte for byte. The entry address answered with a redirect to `/login` and an `HttpOnly`, `Secure` cookie; with it, the pages, the API and the files answered.
 - The receiver, from outside: `/`, `/alerts`, `/health` and a wrong path answered `404 not found`; at its address `/health` answered `200` and a `GET` `405`.
 - The one exception is `/robots.txt`: this zone serves a robots.txt of Cloudflare's own, and a stranger gets that from both hostnames instead of `not found`. See [the sign-in address](deploying.md#the-sign-in-address).
-- **Not checked**: the free plan (the CPU time a sign-in needs), the sign-in rate limiter, the daily clean-up, and a second deployment with a `NAME_SUFFIX`.
+- **Not checked**: the free plan (the CPU time a sign-in needs), the sign-in rate limiter, the daily clean-up, and a second deployment (`deploy.<name>.env`).
