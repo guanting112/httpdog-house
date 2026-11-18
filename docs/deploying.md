@@ -28,7 +28,7 @@ INGEST_DOMAIN=hook.example.com     # where httpdog POSTs: https://hook.example.c
 
 | Step | What happens |
 |---|---|
-| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created. It says what to put in the file, and what `ENTRY_PATH` in the same file is: the last piece of the address you will sign in at, yours to choose now or left for `make setup` to make |
+| Before anything | Reads the two hostnames from `deploy.local.env`. Without both, it stops here: nobody is asked anything and nothing is created. It says what to put in the file, and what `ENTRY_PATH` and `INGEST_PATH` in the same file are: a piece of the address you will sign in at and of the address httpdog sends to, each yours to choose now or left for `make setup` to make |
 | 1. Cloudflare account | If this machine is not logged in, `wrangler login` opens your browser. Then it says who is logged in, which account that is and which hostnames, and asks. Anything but a yes stops it before anything is created. A login that reaches several accounts has to say which: `CLOUDFLARE_ACCOUNT_ID=<id> make setup`. After the yes it notes a new `ENTRY_PATH` and a new `INGEST_PATH` in `deploy.local.env`, unless they are there |
 | 2. Database | Creates the D1 database `httpdog-house` and notes its id in `deploy.local.env`. A database of that name that the account already has is used as it is |
 | 3. Tables | Applies `migrations/`. wrangler asks before it does |

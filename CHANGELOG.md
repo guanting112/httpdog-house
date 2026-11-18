@@ -1,8 +1,16 @@
 # Changelog
 
-Notable changes in each version. A version is a tag on `main`, such as `v0.1.0`. Add a line under Unreleased for anything someone who runs a deployment would notice.
+Notable changes in each version. A version is a tag on `main`, such as `v0.1.0`, with a GitHub release that carries its section from this file. Add a line under Unreleased for anything someone who runs a deployment would notice.
 
 ## [Unreleased]
+
+## [0.1.2] - 2026-11-19
+
+The deployed Workers behave the same as in 0.1.1.
+
+### Changed
+
+- The note `make setup` gives with the two hostnames now covers `INGEST_PATH` as well as `ENTRY_PATH`: the piece of the address httpdog sends to, best settled before a host sends to it.
 
 ## [0.1.1] - 2026-11-19
 
@@ -32,6 +40,7 @@ The first numbered release.
 - **More than one deployment in an account**, each from an env file of its own.
 - **Retention.** Alerts are kept 365 days by default; `RETENTION_DAYS` changes it.
 
-[Unreleased]: https://github.com/guanting112/httpdog-house/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/guanting112/httpdog-house/tree/v0.1.1
-[0.1.0]: https://github.com/guanting112/httpdog-house/tree/v0.1.0
+[Unreleased]: https://github.com/guanting112/httpdog-house/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/guanting112/httpdog-house/releases/tag/v0.1.2
+[0.1.1]: https://github.com/guanting112/httpdog-house/releases/tag/v0.1.1
+[0.1.0]: https://github.com/guanting112/httpdog-house/releases/tag/v0.1.0

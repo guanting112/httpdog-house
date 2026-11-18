@@ -28,7 +28,7 @@ INGEST_DOMAIN=hook.example.com     # httpdog POST 的地方:https://hook.example
 
 | 步驟 | 做了什麼 |
 |---|---|
-| 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西。它會說明檔案裡要填什麼,也會提醒同一個檔案裡的 `ENTRY_PATH` 是什麼:登入網址的最後一段,可以現在自己取,也可以留空讓 `make setup` 產生 |
+| 開始之前 | 從 `deploy.local.env` 讀兩個主機名稱。缺任何一個就停在這裡:不會問任何問題,也不會建立任何東西。它會說明檔案裡要填什麼,也會提醒同一個檔案裡的 `ENTRY_PATH` 與 `INGEST_PATH` 是什麼:登入網址與 httpdog 送告警的網址各有一段由它們決定,可以現在自己取,也可以留空讓 `make setup` 產生 |
 | 1. Cloudflare 帳號 | 這台機器還沒登入的話,`wrangler login` 會開啟瀏覽器。接著它會顯示登入的是誰、是哪個帳號、要用哪兩個主機名稱,並詢問你。回答的不是 yes 就會停下來,什麼都不會建立。登入的身分可以使用多個帳號時,必須指定其中一個:`CLOUDFLARE_ACCOUNT_ID=<id> make setup`。回答 yes 之後,如果 `deploy.local.env` 還沒有 `ENTRY_PATH` 與 `INGEST_PATH`,它會各寫入一個新的 |
 | 2. 資料庫 | 建立 D1 資料庫 `httpdog-house`,並把它的 id 記在 `deploy.local.env`。帳號裡已經有同名的資料庫時,就直接使用它 |
 | 3. 資料表 | 套用 `migrations/`。wrangler 會先問你要不要繼續 |

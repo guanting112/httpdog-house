@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { INGEST_DEPLOY, LOCAL, LOCAL_EXAMPLE, parseEnv, UI_DEPLOY } from '../scripts/deploy-config'
 import { isEntryPath } from '../shared/door'
-import { ENTRY_NOTE, findDatabase, readCount, setEnvValue, setup, SetupError, type Shell } from '../scripts/setup'
+import { PATHS_NOTE, findDatabase, readCount, setEnvValue, setup, SetupError, type Shell } from '../scripts/setup'
 
 const ID = '0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0'
 const EXAMPLE = readFileSync(resolve(import.meta.dir, '..', LOCAL_EXAMPLE), 'utf8')
@@ -124,9 +124,10 @@ describe('make setup, before it starts', () => {
     expect((stopped as Error).message).toContain('UI_DOMAIN=')
     expect((stopped as Error).message).toContain('INGEST_DOMAIN=')
     expect((stopped as Error).message).toContain('`make setup` again')
-    // and while the file is open: what ENTRY_PATH is, and that the address it makes is the only way in
-    expect((stopped as Error).message).toContain(ENTRY_NOTE)
-    expect(ENTRY_NOTE).toContain('https://<UI_DOMAIN>/<ENTRY_PATH>')
+    // and while the file is open: what the two paths in it are, each with the address it makes
+    expect((stopped as Error).message).toContain(PATHS_NOTE)
+    expect(PATHS_NOTE).toContain('https://<UI_DOMAIN>/<ENTRY_PATH>')
+    expect(PATHS_NOTE).toContain('https://<INGEST_DOMAIN>/<INGEST_PATH>/alerts')
     // the file is the example, ready to be filled in
     expect(state.files[LOCAL]).toBe(EXAMPLE)
     // nobody was asked anything, and Cloudflare was not even looked at
@@ -138,7 +139,7 @@ describe('make setup, before it starts', () => {
       const { state, shell } = account({ file })
       const stopped = await setup(shell).catch((error: Error) => error)
       expect((stopped as Error).message).toContain('Two hostnames of your own are needed first')
-      expect((stopped as Error).message).toContain(ENTRY_NOTE)
+      expect((stopped as Error).message).toContain(PATHS_NOTE)
       expect([state.ran, state.looked, state.confirmations]).toEqual([[], [], []])
       expect(state.files[LOCAL]).toBe(file)
     }
@@ -148,8 +149,8 @@ describe('make setup, before it starts', () => {
     const { state, shell } = account({ file: setEnvValue(READY, 'UI_DOMAIN', 'https://alerts.example.com') })
     const stopped = await setup(shell).catch((error: Error) => error)
     expect((stopped as Error).message).toContain('UI_DOMAIN')
-    // a mistyped hostname is one thing to fix; the note about the entry path is not repeated here
-    expect((stopped as Error).message).not.toContain(ENTRY_NOTE)
+    // a mistyped hostname is one thing to fix; the note about the two paths is not repeated here
+    expect((stopped as Error).message).not.toContain(PATHS_NOTE)
     expect([state.ran, state.looked]).toEqual([[], []])
   })
 })
